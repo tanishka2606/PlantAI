@@ -1,0 +1,32 @@
+﻿.seed-box {
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.seed-result-card {
+  margin-top: 28px;
+  text-align: left;
+  border-top: 4px solid #10b981;
+}
+
+.seed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.seed-name {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--primary-dark);
+}
+
+.seed-scientific {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--text-muted);
+}
