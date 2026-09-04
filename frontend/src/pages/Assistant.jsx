@@ -1,5 +1,20 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
+import { 
+  Bot, 
+  User, 
+  Send, 
+  Trash2, 
+  Sparkles, 
+  Leaf, 
+  Droplets, 
+  Sun, 
+  Shovel, 
+  AlertCircle, 
+  HelpCircle,
+  CornerDownLeft,
+  RotateCcw
+} from "lucide-react";
 import { askAssistant } from "../services/api";
 import "./Assistant.css";
 
@@ -12,10 +27,12 @@ function Assistant() {
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState([
     {
+      id: 1,
       sender: "bot",
       text: initialPlant
-        ? `🌱 Hello! I'm PlantAI Assistant. I am ready to assist you with care, watering, fertilizers, or troubleshooting for ${initialPlant}. What would you like to know?`
-        : "🌱 Hello! I'm PlantAI Assistant. Ask me anything about plant care, watering schedules, sunlight needs, soil mixtures, repotting, or disease remedies.",
+        ? `Hello! I am PlantAI Assistant. I am focused on ${initialPlant} with verified MySQL care parameters. What would you like to know regarding watering intervals, sunlight, soil, fertilizers, or troubleshooting?`
+        : "Hello! I am PlantAI Assistant. Ask me anything regarding plant care routines, watering schedules, sunlight needs, repotting, fertilizer dosing, or yellow foliage remedies.",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     },
   ]);
 
@@ -33,28 +50,44 @@ function Assistant() {
     const query = (textToSend || inputMessage).trim();
     if (!query || loading) return;
 
-    // Append user message
-    setMessages((prev) => [...prev, { sender: "user", text: query }]);
+    const userMsg = {
+      id: Date.now(),
+      sender: "user",
+      text: query,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
     setInputMessage("");
     setLoading(true);
 
     try {
       const response = await askAssistant(query, activePlant);
-      const botAnswer =
-        response.answer || response.message || "I apologize, but I could not formulate an answer right now.";
+      const botAnswer = response.answer || response.message || "I apologize, but I could not formulate a response right now.";
 
       if (response.plant_name && !activePlant) {
         setActivePlant(response.plant_name);
       }
 
-      setMessages((prev) => [...prev, { sender: "bot", text: botAnswer }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: "bot",
+          text: botAnswer,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        },
+      ]);
     } catch (err) {
       console.error("Assistant chat error:", err);
       setMessages((prev) => [
         ...prev,
         {
+          id: Date.now() + 1,
           sender: "bot",
-          text: "❌ Could not reach the PlantAI assistant service. Please check your backend connection.",
+          text: "Unable to reach the PlantAI assistant. Please make sure the backend server is running.",
+          isError: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         },
       ]);
     } finally {
@@ -62,120 +95,211 @@ function Assistant() {
     }
   };
 
+  const handleClearChat = () => {
+    setMessages([
+      {
+        id: Date.now(),
+        sender: "bot",
+        text: activePlant
+          ? `Chat history cleared. Still focused on ${activePlant}. Ask me any botanical care question.`
+          : "Chat history cleared. How can I assist you with your plants today?",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
+  };
+
+  // Section 26 suggested prompts
+  const suggestedPrompts = [
+    { label: "How often should I water it?", icon: Droplets },
+    { label: "How much sunlight does it need?", icon: Sun },
+    { label: "What soil should I use?", icon: Shovel },
+    { label: "Why are the leaves turning yellow?", icon: AlertCircle },
+    { label: "Should I keep it indoors?", icon: Leaf },
+  ];
+
   return (
-    <div className="page-container">
-      <header className="page-header">
+    <div className="page-container assistant-page-container">
+      {/* Header */}
+      <header className="page-header" style={{ marginBottom: "28px" }}>
         <div className="page-badge">
-          <span>🤖</span> Conversational Botanical Intelligence
+          <Bot size={14} />
+          <span>Conversational Botanical Intelligence</span>
         </div>
         <h1 className="page-title">AI Plant Assistant</h1>
         <p className="page-subtitle">
-          Ask questions about watering frequencies, sunlight requirements, pest control, soil types, and plant health problems.
+          Ask questions regarding watering, sunlight, soil, fertilizers, location, or troubleshooting yellowing leaves.
         </p>
       </header>
 
-      <div className="assistant-box">
-        <div className="plant-card chat-card">
-          {/* Header Bar */}
-          <div className="chat-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "20px" }}>🌿</span>
-              <div>
-                <strong style={{ color: "var(--text-main)", fontSize: "15px" }}>Plant Care Bot</strong>
-                <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>Online & Ready</div>
-              </div>
+      {/* Main Assistant Split Layout: Sidebar + Main Chat */}
+      <div className="assistant-layout-grid">
+        {/* Left Sidebar per Section 24 */}
+        <aside className="assistant-sidebar">
+          {/* Current Plant Focus Card */}
+          <div className="sidebar-card">
+            <div className="sidebar-card-header">
+              <Leaf size={16} className="text-emerald" />
+              <h4>Current Plant Focus</h4>
             </div>
-
-            <div className="chat-context-tag">
-              <span>🎯 Focus:</span>
+            <p className="sidebar-card-desc">Set the botanical specimen context for precise advice:</p>
+            <div className="active-plant-input-wrap">
               <input
                 type="text"
+                className="active-plant-input"
                 value={activePlant}
-                placeholder="General / Select Plant"
+                placeholder="e.g. Hibiscus, Neem, Rose..."
                 onChange={(e) => setActivePlant(e.target.value)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontWeight: "700",
-                  color: "var(--primary-dark)",
-                  outline: "none",
-                  width: "120px",
-                  fontSize: "13px",
-                }}
-                title="Click to change active plant focus"
               />
+              {activePlant && (
+                <button
+                  className="btn-clear-plant"
+                  onClick={() => setActivePlant("")}
+                  title="Clear plant focus"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {activePlant && (
+              <div className="plant-context-badge">
+                <span className="live-dot-small"></span>
+                <span>Context: {activePlant}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Suggested Questions per Section 24 & 26 */}
+          <div className="sidebar-card">
+            <div className="sidebar-card-header">
+              <Sparkles size={16} className="text-accent" />
+              <h4>Suggested Questions</h4>
+            </div>
+            <div className="suggested-prompts-list">
+              {suggestedPrompts.map((item, idx) => {
+                const IconComp = item.icon;
+                return (
+                  <button
+                    key={idx}
+                    className="sidebar-prompt-btn"
+                    onClick={() => handleSend(item.label)}
+                    disabled={loading}
+                  >
+                    <IconComp size={15} className="prompt-icon" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Messages Area */}
-          <div className="chat-messages">
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`message-row ${msg.sender === "user" ? "message-user" : "message-bot"}`}
-              >
-                <div className={`avatar ${msg.sender === "user" ? "avatar-user" : "avatar-bot"}`}>
-                  {msg.sender === "user" ? "👤" : "🌱"}
-                </div>
-                <div className={`message-bubble ${msg.sender === "user" ? "bubble-user" : "bubble-bot"}`}>
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-
-            {loading && (
-              <div className="message-row message-bot">
-                <div className="avatar avatar-bot">🌱</div>
-                <div className="message-bubble bubble-bot" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span className="spinner" style={{ borderColor: "#15803d", borderTopColor: "transparent" }}></span>
-                  <span>PlantAI is thinking...</span>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Quick Suggestion Chips */}
-          <div className="suggestions-bar">
-            {[
-              "💧 How often should I water?",
-              "☀️ What sunlight is best?",
-              "🌱 What potting soil to use?",
-              "🍂 Why are the leaves turning yellow?",
-              "🛡️ How do I treat pests and bugs?",
-            ].map((chip, idx) => (
-              <button
-                key={idx}
-                className="suggestion-chip"
-                onClick={() => handleSend(chip.replace(/^[^\w]+/, ""))}
-                disabled={loading}
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-
-          {/* Input Bar */}
-          <form
-            className="chat-input-container"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSend();
-            }}
-          >
-            <input
-              type="text"
-              className="chat-input"
-              placeholder="Ask any plant care or troubleshooting question..."
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              disabled={loading}
-            />
-            <button type="submit" className="btn btn-primary" disabled={loading || !inputMessage.trim()}>
-              Send
+          {/* Clear Chat Action */}
+          <div className="sidebar-bottom-actions">
+            <button
+              className="btn btn-outline btn-clear-chat"
+              onClick={handleClearChat}
+              disabled={loading || messages.length <= 1}
+            >
+              <Trash2 size={15} />
+              <span>Clear Conversation</span>
             </button>
-          </form>
-        </div>
+          </div>
+        </aside>
+
+        {/* Right Main Chat Panel per Section 24 */}
+        <main className="assistant-main-chat">
+          <div className="chat-window-card">
+            {/* Chat Top Banner */}
+            <div className="chat-top-banner">
+              <div className="chat-bot-status">
+                <div className="bot-avatar-wrap">
+                  <Bot size={18} />
+                </div>
+                <div>
+                  <div className="bot-title">PlantAI Care Expert</div>
+                  <div className="bot-subtitle">
+                    <span className="live-dot-small"></span> Active & Connected to MySQL Knowledge
+                  </div>
+                </div>
+              </div>
+
+              {activePlant && (
+                <div className="active-plant-pill">
+                  <span>Focus: <strong>{activePlant}</strong></span>
+                </div>
+              )}
+            </div>
+
+            {/* Conversation Messages Container */}
+            <div className="chat-messages-scroll">
+              {messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`chat-message-row ${msg.sender === "user" ? "row-user" : "row-bot"}`}
+                >
+                  <div className={`message-avatar ${msg.sender === "user" ? "user-avatar" : "bot-avatar"}`}>
+                    {msg.sender === "user" ? <User size={15} /> : <Bot size={15} />}
+                  </div>
+                  
+                  <div className="message-content-group">
+                    <div className={`message-bubble ${msg.sender === "user" ? "bubble-user" : "bubble-bot"} ${msg.isError ? "bubble-error" : ""}`}>
+                      {msg.text}
+                    </div>
+                    <span className="message-timestamp">{msg.timestamp}</span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Typing Indicator Animation */}
+              {loading && (
+                <div className="chat-message-row row-bot">
+                  <div className="message-avatar bot-avatar">
+                    <Bot size={15} />
+                  </div>
+                  <div className="message-bubble bubble-bot typing-bubble">
+                    <div className="typing-dots">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <span className="typing-text">PlantAI is thinking...</span>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Bar */}
+            <form
+              className="chat-input-wrapper"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSend();
+              }}
+            >
+              <input
+                type="text"
+                className="chat-text-input"
+                placeholder={
+                  activePlant
+                    ? `Ask anything about ${activePlant}...`
+                    : "Ask about watering, sunlight, soil, fertilizers, or yellow leaves..."
+                }
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                className="btn btn-primary btn-chat-send"
+                disabled={loading || !inputMessage.trim()}
+                title="Send Question"
+              >
+                <Send size={16} />
+                <span>Send</span>
+              </button>
+            </form>
+          </div>
+        </main>
       </div>
     </div>
   );

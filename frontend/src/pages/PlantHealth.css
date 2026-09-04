@@ -1,110 +1,207 @@
-﻿.health-box {
-  max-width: 680px;
-  margin: 0 auto;
-  width: 100%;
+.health-workspace-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 32px;
+  align-items: start;
 }
 
-.health-result-card {
-  margin-top: 24px;
-  text-align: left;
-  border-top: 4px solid var(--primary);
-}
-
-.health-status-header {
+.health-upload-card, .health-result-panel-card {
+  min-height: 500px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-light);
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
 }
 
-.status-indicator {
+.health-assessment-content {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Status Cards */
+.health-status-box {
+  border-radius: var(--radius-md);
+  padding: 24px;
+  border: 1px solid var(--border-light);
+}
+
+.healthy-box {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: rgba(21, 128, 61, 0.25);
+}
+
+.diseased-box {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: rgba(217, 119, 6, 0.25);
+}
+
+.status-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.status-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 22px;
-  font-weight: 800;
-}
-
-.status-healthy {
-  color: #15803d;
-}
-
-.status-diseased {
-  color: #b91c1c;
-}
-
-.health-condition-banner {
-  background: #fef2f2;
-  border: 1.5px solid #fca5a5;
-  border-radius: var(--radius-md);
-  padding: 16px 20px;
-  margin-bottom: 20px;
-}
-
-.health-condition-title {
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
   font-size: 13px;
   font-weight: 700;
-  text-transform: uppercase;
-  color: #991b1b;
-  letter-spacing: 0.5px;
 }
 
-.health-condition-name {
+.status-pill-healthy {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid rgba(21, 128, 61, 0.2);
+}
+
+.status-pill-disease {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid rgba(180, 83, 9, 0.2);
+}
+
+.health-main-heading {
   font-size: 22px;
   font-weight: 800;
-  color: #7f1d1d;
-  margin-top: 4px;
-}
-
-.health-sections-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.health-section-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: var(--radius-md);
-  padding: 16px 20px;
-}
-
-.health-section-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--primary-dark);
+  color: #14532d;
   margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  letter-spacing: -0.02em;
 }
 
-.health-list {
-  margin-left: 20px;
-  font-size: 14px;
-  color: #334155;
-  line-height: 1.55;
+.health-observation-text {
+  font-size: 14.5px;
+  color: #166534;
+  line-height: 1.5;
+  margin-bottom: 16px;
 }
 
-.health-list li {
+/* Condition Highlight */
+.condition-highlight-wrap {
+  margin-bottom: 14px;
+}
+
+.condition-pre-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #92400e;
+  display: block;
   margin-bottom: 4px;
 }
 
-.health-disclaimer-box {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1e40af;
-  padding: 14px 18px;
-  border-radius: var(--radius-md);
+.condition-name {
+  font-size: 26px;
+  font-weight: 800;
+  color: #78350f;
+  letter-spacing: -0.02em;
+}
+
+.observation-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(180, 83, 9, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.observation-box strong {
   font-size: 13px;
-  margin-top: 24px;
+  color: #78350f;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.observation-box p {
+  font-size: 13.5px;
+  color: #92400e;
   line-height: 1.5;
+}
+
+/* Pathology Grid */
+.pathology-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.pathology-section-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+}
+
+.pathology-section-box.full-width {
+  grid-column: span 2;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.section-title-row h4 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pathology-list {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pathology-list li {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.text-emerald {
+  color: var(--accent-emerald);
+}
+
+.text-accent {
+  color: var(--accent-mint);
+}
+
+/* AI Guidance Disclaimer */
+.ai-disclaimer-notice {
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  padding: 14px 18px;
+  background: var(--bg-subtle);
+  border-left: 3px solid var(--forest-700);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.ai-disclaimer-notice strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 960px) {
+  .health-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+  .pathology-grid {
+    grid-template-columns: 1fr;
+  }
+  .pathology-section-box.full-width {
+    grid-column: span 1;
+  }
 }

@@ -1,4 +1,4 @@
-﻿from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict
 from pydantic import BaseModel, EmailStr, Field
 
 class UserRegister(BaseModel):
@@ -69,6 +69,7 @@ class PlantCareData(BaseModel):
     soil: Optional[str] = None
     container: Optional[str] = None
     location: Optional[str] = None
+    fertilizer: Optional[str] = None
     care: Optional[str] = None
     source: str = "MySQL"
 

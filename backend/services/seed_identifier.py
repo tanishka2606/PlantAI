@@ -1,5 +1,6 @@
-﻿import os
+import os
 import requests
+import base64
 import json
 from dotenv import load_dotenv
 from typing import Dict, Any, List, Optional
@@ -10,19 +11,21 @@ load_dotenv()
 PLANTNET_API_KEY = os.getenv("PLANTNET_API_KEY")
 KINDWISE_API_KEY = os.getenv("KINDWISE_API_KEY")
 AI_API_KEY = os.getenv("AI_API_KEY") or os.getenv("GEMINI_API_KEY")
-SEED_CONFIDENCE_THRESHOLD = float(os.getenv("SEED_CONFIDENCE_THRESHOLD", "0.70"))
+
+SEED_CONFIDENCE_THRESHOLD = float(os.getenv("SEED_CONFIDENCE_THRESHOLD", "0.50"))
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(10 * 1024 * 1024)))
 
 def identify_seed(image_bytes: bytes, filename: str, content_type: str) -> Dict[str, Any]:
     """
-    Dedicated Seed Identification Pipeline:
-    1. Validates image file, format, resolution, lighting, and readability.
-    2. Calls real seed/fruit botanical recognition API (Pl@ntNet fruit organ / Kindwise / Gemini).
-    3. Parses real response without fabricating confidence or seed names.
-    4. Applies strict confidence threshold (SEED_CONFIDENCE_THRESHOLD=0.70).
-    5. Returns structured response matching specification.
+    Dedicated botanical seed identification pipeline:
+    1. Pre-flight image validation and preprocessing (checks darkness, blur, empty upload).
+    2. Primary: Pl@ntNet API using organ='fruit' (botanically classifies seeds, grains, and pods).
+    3. Secondary: Kindwise Plant.id API (handles quota/credits gracefully).
+    4. Tertiary: Gemini Vision API (if AI_API_KEY is configured).
+    5. Evaluates confidence against SEED_CONFIDENCE_THRESHOLD.
+    6. Strictly adheres to Rule 21: IDENTIFICATION ONLY (no care/germination advice).
     """
-    # 1. Pre-flight Image Validation
+    # 1. Validation & Preprocessing
     is_valid, processed_bytes, val_error, quality_warning = validate_and_preprocess_image(
         image_bytes, filename, content_type, max_size=MAX_UPLOAD_SIZE
     )
@@ -30,14 +33,14 @@ def identify_seed(image_bytes: bytes, filename: str, content_type: str) -> Dict[
         return {
             "success": False,
             "status": "validation_error",
-            "message": val_error or "Unable to identify the seed from this image. Please upload a clear image of a single seed.",
+            "message": val_error or "Please upload a clear close-up image of a seed or grain.",
             "data": None
         }
 
     best_match: Optional[Dict[str, Any]] = None
-    all_candidates: List[Dict[str, Any]] = []
+    candidates: List[Dict[str, Any]] = []
 
-    # 2. Call Pl@ntNet API with organ set to 'fruit' (botanically covers seeds, grains, and pods)
+    # 2. Try Pl@ntNet API with organ set to 'fruit' (captures seeds, pods, and grains)
     if PLANTNET_API_KEY:
         try:
             plantnet_url = "https://my-api.plantnet.org/v2/identify/all"
@@ -67,26 +70,20 @@ def identify_seed(image_bytes: bytes, filename: str, content_type: str) -> Dict[
                     c_name = common_names[0] if common_names else sci_name
                     score = float(res.get("score", 0.0))
 
-                    candidate = {
+                    item = {
                         "scientific_name": sci_name,
                         "common_name": c_name,
                         "confidence": score,
                         "confidence_percent": round(score * 100, 1)
                     }
-                    all_candidates.append(candidate)
+                    candidates.append(item)
 
-                if all_candidates:
-                    best_match = all_candidates[0]
-            elif response.status_code in (401, 403):
-                print("Pl@ntNet API Auth error:", response.status_code)
-            elif response.status_code == 429:
-                print("Pl@ntNet API Rate limit reached.")
-        except requests.exceptions.Timeout:
-            print("Pl@ntNet request timed out.")
+                if candidates:
+                    best_match = candidates[0]
         except Exception as e:
             print("Pl@ntNet Seed API error:", e)
 
-    # 3. Fallback / Complement with Kindwise if Pl@ntNet produced no candidates or low confidence
+    # 3. Try Kindwise Plant.id API if available and Pl@ntNet didn't reach high confidence
     if (not best_match or best_match["confidence"] < SEED_CONFIDENCE_THRESHOLD) and KINDWISE_API_KEY:
         try:
             kindwise_response = requests.post(
@@ -98,107 +95,99 @@ def identify_seed(image_bytes: bytes, filename: str, content_type: str) -> Dict[
             if kindwise_response.status_code in (200, 201):
                 kw_data = kindwise_response.json()
                 kw_suggestions = kw_data.get("result", {}).get("classification", {}).get("suggestions", [])
+                kw_candidates = []
                 for sug in kw_suggestions[:5]:
                     name = sug.get("name", "Unknown")
                     details = sug.get("details", {}) or {}
                     c_names = details.get("common_names") or details.get("commonNames") or []
                     c_name = c_names[0] if c_names else name
                     prob = float(sug.get("probability", 0.0))
-
-                    candidate = {
+                    kw_candidates.append({
                         "scientific_name": name,
                         "common_name": c_name,
                         "confidence": prob,
                         "confidence_percent": round(prob * 100, 1)
-                    }
-                    if not best_match or prob > best_match["confidence"]:
-                        best_match = candidate
+                    })
+
+                if kw_candidates and (not best_match or kw_candidates[0]["confidence"] > best_match["confidence"]):
+                    best_match = kw_candidates[0]
+                    candidates = kw_candidates
             elif kindwise_response.status_code == 429:
-                print("Kindwise API limit reached (429).")
+                print("Kindwise Seed API quota reached (429).")
         except Exception as e:
             print("Kindwise Seed API error:", e)
 
-    # 4. If AI_API_KEY (Gemini Vision) is configured, use it for botanical seed identification
+    # 4. Try Gemini Vision if configured
     if (not best_match or best_match["confidence"] < SEED_CONFIDENCE_THRESHOLD) and AI_API_KEY:
         try:
-            import base64
-            b64_img = base64.b64encode(processed_bytes).decode("utf-8")
-            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={AI_API_KEY}"
+            encoded_image = base64.b64encode(processed_bytes).decode("utf-8")
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={AI_API_KEY}"
             prompt = (
-                "You are an expert botanical carpologist. Identify the seed or grain in this image. "
-                "Output ONLY a JSON object with keys: "
-                "'is_seed' (boolean), 'seed_name' (string), 'common_name' (string), 'scientific_name' (string), 'confidence' (float 0.0-1.0), 'explanation' (string). "
-                "If not a seed or uncertain, set confidence accordingly."
+                "You are an expert botanical seed identification system. Inspect this seed or grain image. "
+                "Output ONLY a valid JSON object with keys: "
+                "'is_seed' (boolean), 'seed_name' (string or null), 'scientific_name' (string or null), 'confidence' (float between 0.0 and 1.0). "
+                "Do NOT include germination or care instructions. Only identify the seed species."
             )
             payload = {
                 "contents": [{
                     "parts": [
                         {"text": prompt},
-                        {"inline_data": {"mime_type": "image/jpeg", "data": b64_img}}
+                        {"inline_data": {"mime_type": "image/jpeg", "data": encoded_image}}
                     ]
                 }],
                 "generationConfig": {"response_mime_type": "application/json"}
             }
             resp = requests.post(gemini_url, json=payload, timeout=20)
             if resp.status_code == 200:
-                raw_json = resp.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                parsed = json.loads(raw_json)
-                if parsed.get("is_seed"):
-                    ai_cand = {
-                        "scientific_name": parsed.get("scientific_name", "Unknown"),
-                        "common_name": parsed.get("common_name") or parsed.get("seed_name", "Unknown"),
-                        "confidence": float(parsed.get("confidence", 0.0)),
-                        "confidence_percent": round(float(parsed.get("confidence", 0.0)) * 100, 1),
-                        "explanation": parsed.get("explanation", "")
+                raw_text = resp.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                parsed = json.loads(raw_text)
+                if parsed.get("is_seed") and parsed.get("seed_name"):
+                    gem_conf = float(parsed.get("confidence", 0.6))
+                    gem_candidate = {
+                        "scientific_name": parsed.get("scientific_name") or parsed.get("seed_name"),
+                        "common_name": parsed.get("seed_name"),
+                        "confidence": gem_conf,
+                        "confidence_percent": round(gem_conf * 100, 1)
                     }
-                    if not best_match or ai_cand["confidence"] > best_match["confidence"]:
-                        best_match = ai_cand
+                    if not best_match or gem_conf > best_match["confidence"]:
+                        best_match = gem_candidate
+                        candidates = [gem_candidate]
         except Exception as e:
             print("Gemini Seed Vision error:", e)
 
-    # 5. Handle No Matches / API Failures
+    # 5. If no match could be produced by any service
     if not best_match:
         return {
             "success": False,
-            "status": "uncertain",
-            "data": {
-                "confidence": 0.0,
-                "confidence_percent": 0.0
-            },
-            "message": "Unable to confidently identify this seed. Please upload a clear image of a single seed."
+            "status": "error",
+            "message": "Seed identification service is temporarily unavailable. Please check your network or try again.",
+            "data": None
         }
 
-    raw_conf = best_match["confidence"]
-    conf_pct = round(raw_conf * 100, 1)
+    confidence = best_match["confidence"]
+    confidence_pct = best_match["confidence_percent"]
 
-    # 6. Apply Strict Confidence Threshold
-    if raw_conf < SEED_CONFIDENCE_THRESHOLD:
+    result_data = {
+        "seed_name": best_match["common_name"] or best_match["scientific_name"],
+        "common_name": best_match["common_name"],
+        "scientific_name": best_match["scientific_name"],
+        "confidence": confidence,
+        "confidence_percent": confidence_pct,
+        "candidates": candidates
+    }
+
+    # 6. Strict Confidence Threshold Check
+    if confidence < SEED_CONFIDENCE_THRESHOLD:
         return {
             "success": False,
-            "status": "uncertain",
-            "data": {
-                "confidence": round(raw_conf, 2),
-                "confidence_percent": conf_pct,
-                "candidate_name": best_match.get("common_name") or best_match.get("scientific_name")
-            },
-            "message": "Seed identification is uncertain. Please upload a clearer image showing the seed from a closer angle."
+            "status": "low_confidence",
+            "message": "The image does not provide enough evidence for a reliable seed identification.",
+            "data": result_data
         }
-
-    # 7. High Confidence Result
-    common_val = best_match.get("common_name")
-    sci_val = best_match.get("scientific_name")
-    seed_title = common_val if common_val else sci_val
 
     return {
         "success": True,
         "status": "identified",
-        "data": {
-            "seed_name": seed_title,
-            "common_name": common_val,
-            "scientific_name": sci_val,
-            "confidence": round(raw_conf, 2),
-            "confidence_percent": conf_pct,
-            "explanation": best_match.get("explanation") or f"Identified as {seed_title} ({sci_val}) seeds based on seed coat morphology."
-        },
-        "message": "Seed identified successfully."
+        "message": f"Seed identified as {best_match['common_name']} ({best_match['scientific_name']})",
+        "data": result_data
     }

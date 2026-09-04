@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, Text, TIMESTAMP
+from sqlalchemy import Column, Integer, String, Text, TIMESTAMP
 from sqlalchemy.sql import func
 from database import Base
 
@@ -22,4 +22,5 @@ class PlantCare(Base):
     soil = Column(Text, nullable=True)
     container = Column(Text, nullable=True)
     location = Column(Text, nullable=True)
+    fertilizer = Column(Text, nullable=True)
     care = Column(Text, nullable=True)

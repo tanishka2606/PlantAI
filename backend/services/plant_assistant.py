@@ -1,4 +1,4 @@
-﻿import re
+import re
 import os
 import requests
 from typing import Dict, Any, Optional
@@ -40,10 +40,10 @@ def ask_assistant(question: str, plant_name: str, db: Session) -> Dict[str, Any]
             # Check if it looks like Gemini key or OpenAI key
             if AI_API_KEY.startswith("AIza"):
                 # Gemini REST endpoint
-                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={AI_API_KEY}"
+                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={AI_API_KEY}"
                 prompt_text = f"You are PlantAI, an expert botanist and plant care assistant. Plant: {p_name or 'General plant'}. "
                 if care_record:
-                    prompt_text += f"Care details: Sunlight: {care_record.sunlight}, Water: {care_record.water}, Soil: {care_record.soil}, Care: {care_record.care}. "
+                    prompt_text += f"Care details: Sunlight: {care_record.sunlight}, Water: {care_record.water}, Soil: {care_record.soil}, Fertilizer: {getattr(care_record, 'fertilizer', '')}, Care: {care_record.care}. "
                 prompt_text += f"User Question: {q}. Provide a concise, clear, and actionable answer (2-4 sentences)."
 
                 resp = requests.post(
@@ -113,7 +113,9 @@ def ask_assistant(question: str, plant_name: str, db: Session) -> Dict[str, Any]
 
     # 7. FERTILIZER / FEEDING
     elif any(k in q_lower for k in ["fertilizer", "fertilize", "feed", "nutrients", "compost", "manure"]):
-        if care_record and care_record.care:
+        if care_record and getattr(care_record, 'fertilizer', None):
+            ans = f"🌸 Fertilizer guidelines for {plant_label}: {care_record.fertilizer}"
+        elif care_record and care_record.care:
             ans = f"🌸 Nutrition & Care for {plant_label}: {care_record.care}"
         else:
             ans = f"🌸 Feed {plant_label} with a balanced liquid fertilizer diluted to half strength once every 3-4 weeks during spring and summer (active growing season)."

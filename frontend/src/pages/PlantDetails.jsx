@@ -1,17 +1,34 @@
-﻿import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
+import { 
+  Sun, 
+  Droplets, 
+  Shovel, 
+  Box, 
+  Compass, 
+  Sparkles, 
+  HeartPulse, 
+  Search, 
+  Database, 
+  Bot, 
+  ArrowRight,
+  BookOpen,
+  AlertTriangle
+} from "lucide-react";
 import { getPlantCare } from "../services/api";
 import "./PlantDetails.css";
 
 function PlantDetails() {
+  const params = useParams();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const initialPlant = location.state?.plantName || "";
-  const initialCommon = location.state?.commonName || "";
+  // Determine target plant from URL params (/plant-care/:plantName), navigation state, or default
+  const urlPlant = params.plantName ? decodeURIComponent(params.plantName) : "";
+  const initialPlant = urlPlant || location.state?.plantName || location.state?.commonName || "";
 
-  const [searchTerm, setSearchTerm] = useState(initialCommon || initialPlant);
-  const [currentQuery, setCurrentQuery] = useState(initialPlant || initialCommon || "Epipremnum aureum");
+  const [searchTerm, setSearchTerm] = useState(initialPlant);
+  const [currentQuery, setCurrentQuery] = useState(initialPlant || "Hibiscus rosa-sinensis");
   const [careData, setCareData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -29,16 +46,23 @@ function PlantDetails() {
         setCareData(response.data);
       } else {
         setErrorMsg(
-          response.message || `Care information for "${queryName}" is currently unavailable in the database.`
+          response.message || `Detailed care information for '${queryName}' is currently unavailable.`
         );
       }
     } catch (err) {
       console.error("Plant care fetch error:", err);
-      setErrorMsg("Could not connect to the database. Please check your backend.");
+      setErrorMsg("Unable to connect to the MySQL plant database. Please make sure the backend server is running.");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (urlPlant) {
+      setSearchTerm(urlPlant);
+      setCurrentQuery(urlPlant);
+    }
+  }, [urlPlant]);
 
   useEffect(() => {
     if (currentQuery) {
@@ -50,171 +74,242 @@ function PlantDetails() {
     e.preventDefault();
     if (searchTerm.trim()) {
       setCurrentQuery(searchTerm.trim());
+      navigate(`/plant-care/${encodeURIComponent(searchTerm.trim())}`);
     }
+  };
+
+  const handleQuickSelect = (name) => {
+    setSearchTerm(name);
+    setCurrentQuery(name);
+    navigate(`/plant-care/${encodeURIComponent(name)}`);
   };
 
   return (
     <div className="page-container">
+      {/* Header */}
       <header className="page-header">
         <div className="page-badge">
-          <span>📖</span> Botanical Database Care Profiles
+          <Database size={14} />
+          <span>Relational MySQL Botanical Care Catalog</span>
         </div>
-        <h1 className="page-title">Smart Plant Care Guide</h1>
+        <h1 className="page-title">Plant Care Guide</h1>
         <p className="page-subtitle">
-          Explore complete cultivation recommendations retrieved directly from our verified MySQL plant database.
+          Structured horticultural profiles for optimal sunlight, watering, soil, container size, location, and fertilization.
         </p>
       </header>
 
-      {/* Search Input for Looking up other plants */}
-      <form className="care-search-box" onSubmit={handleSearch}>
-        <input
-          type="text"
-          className="care-search-input"
-          placeholder="Search by plant name (e.g. Neem, Rose, Mango, Money Plant)..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <button type="submit" className="btn btn-primary">
-          Search
+      {/* Search Bar */}
+      <form className="care-search-form" onSubmit={handleSearch}>
+        <div className="search-input-wrap">
+          <Search size={18} className="search-icon" />
+          <input
+            type="text"
+            className="care-search-input"
+            placeholder="Search plant by common or scientific name (e.g., Neem, Rose, Tomato, Snake Plant)..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary btn-care-search">
+          Lookup Care Guide
         </button>
       </form>
 
-      {/* Quick suggestions */}
-      <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap", marginBottom: "30px" }}>
-        {["Money Plant", "Rose", "Hibiscus", "Neem", "Tomato", "Aloe Vera", "Tulsi"].map((name) => (
+      {/* Quick Plant Suggestions Pills */}
+      <div className="quick-suggestions-bar">
+        <span className="suggestions-label">Popular profiles:</span>
+        {[
+          "Neem",
+          "Mango",
+          "Rose",
+          "Tomato",
+          "Aloe Vera",
+          "Hibiscus",
+          "Jasmine",
+          "Tulsi",
+          "Mint",
+          "Coriander",
+          "Banana",
+          "Guava",
+          "Papaya",
+          "Pomegranate",
+          "Potato",
+          "Spinach",
+          "Chilli",
+          "Okra",
+          "Snake Plant"
+        ].map((name) => (
           <button
             key={name}
             type="button"
-            onClick={() => {
-              setSearchTerm(name);
-              setCurrentQuery(name);
-            }}
-            style={{
-              background: "rgba(255, 255, 255, 0.7)",
-              border: "1px solid var(--border-light)",
-              padding: "6px 14px",
-              borderRadius: "var(--radius-full)",
-              fontSize: "13px",
-              fontWeight: "600",
-              color: "var(--primary-dark)",
-              cursor: "pointer",
-            }}
+            className={`suggestion-pill ${currentQuery.toLowerCase().includes(name.toLowerCase()) ? "active" : ""}`}
+            onClick={() => handleQuickSelect(name)}
           >
             {name}
           </button>
         ))}
       </div>
 
-      <div className="plant-card">
+      {/* Care Details Main Card */}
+      <div className="plant-card care-profile-card">
         {loading && (
-          <div style={{ textAlign: "center", padding: "40px 0" }}>
-            <span className="spinner" style={{ borderColor: "#15803d", borderTopColor: "transparent", width: "28px", height: "28px" }}></span>
-            <p style={{ marginTop: "14px", color: "var(--text-muted)", fontSize: "15px" }}>
-              Retrieving plant care data from MySQL database...
-            </p>
+          <div className="care-loading-state">
+            <span className="spinner spinner-primary" style={{ width: "32px", height: "32px" }}></span>
+            <p>Retrieving botanical record from MySQL database...</p>
           </div>
         )}
 
         {errorMsg && !loading && (
-          <div style={{ textAlign: "center", padding: "30px 20px" }}>
+          <div className="care-not-found-state">
             <div className="alert-banner alert-warning" style={{ justifyContent: "center" }}>
-              <span>⚠️</span>
+              <AlertTriangle size={18} />
               <div>{errorMsg}</div>
             </div>
-            <div style={{ marginTop: "20px" }}>
+            <div style={{ marginTop: "24px", display: "flex", gap: "12px", justifyContent: "center" }}>
               <button
-                className="btn btn-outline"
+                className="btn btn-primary"
                 onClick={() =>
                   navigate("/assistant", {
                     state: { plantName: searchTerm || currentQuery },
                   })
                 }
               >
-                <span>🤖</span> Ask AI Assistant about this plant
+                <Bot size={16} />
+                <span>Ask AI Assistant about {searchTerm || currentQuery}</span>
               </button>
             </div>
           </div>
         )}
 
         {careData && !loading && (
-          <div>
-            <div className="care-plant-header">
-              <h2 className="care-plant-title">
-                🌿 {careData.common_name || careData.plant_name}
-              </h2>
-              {careData.plant_name !== careData.common_name && (
-                <div className="care-plant-scientific">
-                  Botanical Name: <em>{careData.plant_name}</em>
-                </div>
-              )}
-              <div style={{ marginTop: "8px" }}>
-                <span className="confidence-badge confidence-high">
-                  🗄️ Database Record #{careData.id || "Verified"}
+          <div className="care-profile-content">
+            {/* Top Botanical Profile Header */}
+            <div className="care-header-box">
+              <div className="care-title-group">
+                <span className="care-taxonomy-badge">Verified Botanical Care Profile</span>
+                <h2 className="care-common-heading">
+                  {careData.common_name || careData.plant_name}
+                </h2>
+                {careData.plant_name && careData.plant_name !== careData.common_name && (
+                  <div className="care-scientific-sub">
+                    Taxonomic Name: <em>{careData.plant_name}</em>
+                  </div>
+                )}
+              </div>
+
+              <div className="care-meta-tag">
+                <span className="badge badge-forest">
+                  <Database size={13} />
+                  <span>MySQL Record #{careData.id || "Verified"}</span>
                 </span>
               </div>
             </div>
 
-            <div className="care-grid">
-              <div className="care-item-card">
-                <div className="care-item-header">
-                  <span>☀️</span> Sunlight
+            {/* Structured Care Parameter Cards Grid */}
+            <div className="care-cards-grid">
+              {/* Sunlight */}
+              <div className="care-metric-card">
+                <div className="care-metric-header">
+                  <div className="metric-icon-wrap sun-icon">
+                    <Sun size={20} />
+                  </div>
+                  <h4>Sunlight</h4>
                 </div>
-                <div className="care-item-content">{careData.sunlight || "Bright natural light."}</div>
+                <div className="care-metric-body">
+                  {careData.sunlight || "Bright natural sunlight required for optimal growth."}
+                </div>
               </div>
 
-              <div className="care-item-card">
-                <div className="care-item-header">
-                  <span>💧</span> Watering
+              {/* Water */}
+              <div className="care-metric-card">
+                <div className="care-metric-header">
+                  <div className="metric-icon-wrap water-icon">
+                    <Droplets size={20} />
+                  </div>
+                  <h4>Watering</h4>
                 </div>
-                <div className="care-item-content">{careData.water || "Water when topsoil is dry."}</div>
+                <div className="care-metric-body">
+                  {careData.water || "Water thoroughly when topsoil is dry; avoid standing water."}
+                </div>
               </div>
 
-              <div className="care-item-card">
-                <div className="care-item-header">
-                  <span>🌱</span> Soil & pH
+              {/* Soil */}
+              <div className="care-metric-card">
+                <div className="care-metric-header">
+                  <div className="metric-icon-wrap soil-icon">
+                    <Shovel size={20} />
+                  </div>
+                  <h4>Soil & Drainage</h4>
                 </div>
-                <div className="care-item-content">{careData.soil || "Well-draining rich potting soil."}</div>
+                <div className="care-metric-body">
+                  {careData.soil || "Rich, well-draining loamy potting soil with organic compost."}
+                </div>
               </div>
 
-              <div className="care-item-card">
-                <div className="care-item-header">
-                  <span>🪴</span> Container & Pot
+              {/* Container */}
+              <div className="care-metric-card">
+                <div className="care-metric-header">
+                  <div className="metric-icon-wrap container-icon">
+                    <Box size={20} />
+                  </div>
+                  <h4>Container & Pot</h4>
                 </div>
-                <div className="care-item-content">{careData.container || "Adequate drainage pot."}</div>
+                <div className="care-metric-body">
+                  {careData.container || "Select a pot with ample drainage holes proportional to root ball."}
+                </div>
               </div>
 
-              <div className="care-item-card">
-                <div className="care-item-header">
-                  <span>🏠</span> Ideal Location
+              {/* Location */}
+              <div className="care-metric-card">
+                <div className="care-metric-header">
+                  <div className="metric-icon-wrap location-icon">
+                    <Compass size={20} />
+                  </div>
+                  <h4>Ideal Location</h4>
                 </div>
-                <div className="care-item-content">{careData.location || "Indoor or sunny balcony."}</div>
+                <div className="care-metric-body">
+                  {careData.location || "Well-ventilated position with bright ambient indirect light."}
+                </div>
               </div>
 
-              <div className="care-item-card">
-                <div className="care-item-header">
-                  <span>🌸</span> Nutrition & Care
+              {/* Fertilizer (Section 13, 32 requirement) */}
+              <div className="care-metric-card fertilizer-card">
+                <div className="care-metric-header">
+                  <div className="metric-icon-wrap fertilizer-icon">
+                    <Sparkles size={20} />
+                  </div>
+                  <h4>Fertilizer & Nutrition</h4>
                 </div>
-                <div className="care-item-content">{careData.care || "Regular fertilization and pruning."}</div>
+                <div className="care-metric-body">
+                  {careData.fertilizer || "Apply balanced organic fertilizer during active growing season."}
+                </div>
               </div>
             </div>
 
+            {/* General Care Maintenance */}
             {careData.care && (
-              <div className="care-full-summary">
-                <strong>Botanical Maintenance Summary:</strong>
-                <p style={{ marginTop: "6px" }}>{careData.care}</p>
+              <div className="care-summary-box">
+                <div className="summary-title-row">
+                  <HeartPulse size={18} className="summary-heart-icon" />
+                  <h3>General Care & Maintenance</h3>
+                </div>
+                <p className="summary-text">{careData.care}</p>
               </div>
             )}
 
-            <div style={{ textAlign: "center" }}>
+            {/* Assistant Jump Button */}
+            <div className="care-footer-actions">
               <button
-                className="btn btn-primary"
+                className="btn btn-primary btn-care-assistant"
                 onClick={() =>
                   navigate("/assistant", {
                     state: { plantName: careData.common_name || careData.plant_name },
                   })
                 }
               >
-                <span>🤖</span> Ask AI Assistant Questions About {careData.common_name || careData.plant_name}
+                <Bot size={18} />
+                <span>Ask AI Assistant Questions About {careData.common_name || careData.plant_name}</span>
+                <ArrowRight size={16} />
               </button>
             </div>
           </div>

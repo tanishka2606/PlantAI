@@ -1,4 +1,15 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
+import { 
+  Sprout, 
+  UploadCloud, 
+  X, 
+  CheckCircle2, 
+  AlertTriangle, 
+  RotateCcw, 
+  Dna, 
+  Sparkles,
+  ArrowRight
+} from "lucide-react";
 import { identifySeed } from "../services/api";
 import "./SeedIdentification.css";
 
@@ -10,9 +21,21 @@ function SeedIdentification() {
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Instantly clear stale state when a new image is selected
+  // Clear previous state when a new image is selected
   const handleFile = (file) => {
     if (!file) return;
+
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type.toLowerCase())) {
+      setErrorMsg("Unsupported file format. Please upload JPG, PNG, or WEBP.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg("File size exceeds 10MB limit. Please choose a smaller image.");
+      return;
+    }
+
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setResult(null);
@@ -49,11 +72,11 @@ function SeedIdentification() {
       const response = await identifySeed(selectedFile);
       setResult(response);
       if (!response.success && response.status === "error") {
-        setErrorMsg(response.message || "Seed identification service temporarily unavailable.");
+        setErrorMsg(response.message || "Seed identification service is temporarily unavailable.");
       }
     } catch (err) {
       console.error("Seed identification error:", err);
-      setErrorMsg("Could not connect to the PlantAI backend. Please verify your connection.");
+      setErrorMsg("Unable to connect to PlantAI backend. Please check your connection.");
     } finally {
       setIdentifying(false);
     }
@@ -61,177 +84,285 @@ function SeedIdentification() {
 
   const seedData = result?.data;
   const isIdentified = result?.success && result?.status === "identified";
-  const isUncertain = result?.status === "uncertain";
-  const isValidationErr = result?.status === "validation_error";
+  const isLowConfidence = result?.status === "low_confidence" || result?.status === "uncertain";
 
   return (
     <div className="page-container">
+      {/* Header */}
       <header className="page-header">
         <div className="page-badge">
-          <span>🌱</span> Dedicated Seed Recognition
+          <Sprout size={14} />
+          <span>Botanical Seed Recognition</span>
         </div>
         <h1 className="page-title">Seed Identification</h1>
         <p className="page-subtitle">
-          Upload a clear close-up photograph of a seed, grain, or pod to accurately determine its botanical origin.
+          Upload a clear close-up photograph of a seed, grain, or pod to determine its botanical species taxonomy.
         </p>
       </header>
 
-      <div className="seed-box">
-        <div className="plant-card">
-          {!previewUrl ? (
-            <div
-              className={`dropzone ${isDragOver ? "active" : ""}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOver(true);
-              }}
-              onDragLeave={() => setIsDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => document.getElementById("seed-file-input").click()}
-            >
-              <div className="dropzone-icon">🌱</div>
-              <div className="dropzone-text">Click to upload seed image or drag & drop</div>
-              <div className="dropzone-hint">Clear close-up images of single seeds produce the highest accuracy</div>
-              <input
-                id="seed-file-input"
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleInputChange}
-                hidden
-              />
-            </div>
-          ) : (
-            <div>
-              <div className="preview-container">
-                <img src={previewUrl} alt="Seed Preview" className="preview-image" />
-                <button
-                  className="btn-remove-preview"
-                  onClick={handleRemoveImage}
-                  title="Remove / Change Image"
-                >
-                  ✕
-                </button>
-              </div>
+      {/* 2-Column Seed Workspace */}
+      <div className="seed-workspace-grid">
+        {/* Left: Upload Workspace */}
+        <div className="seed-left-panel">
+          <div className="plant-card seed-upload-card">
+            <h3 className="panel-title">Seed Specimen Upload</h3>
+            <p className="panel-subtitle">Upload a macro or close-up photo of a seed on a contrasting background</p>
 
-              <div style={{ textAlign: "center", marginTop: "16px" }}>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleIdentify}
-                  disabled={identifying}
-                  style={{ width: "100%", maxWidth: "300px" }}
-                >
-                  {identifying ? (
+            {!previewUrl ? (
+              <div
+                className={`dropzone ${isDragOver ? "active" : ""}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(true);
+                }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById("seed-file-input").click()}
+              >
+                <div className="dropzone-icon-wrap">
+                  <UploadCloud size={28} />
+                </div>
+                <div className="dropzone-text">Click to upload seed photo or drag & drop</div>
+                <div className="dropzone-hint">Place seeds on a plain background for maximum recognition accuracy</div>
+                <input
+                  id="seed-file-input"
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={handleInputChange}
+                  hidden
+                />
+              </div>
+            ) : (
+              <div className="uploaded-preview-wrapper">
+                <div className="preview-container">
+                  <img src={previewUrl} alt="Seed Specimen Preview" className="preview-image" />
+                  
+                  {/* Laser scan animation when analyzing */}
+                  {identifying && (
                     <>
-                      <span className="spinner"></span>
-                      <span>Analyzing seed features...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>🔍</span>
-                      <span>Identify Seed</span>
+                      <div className="scan-beam"></div>
+                      <div className="scan-overlay-grid"></div>
                     </>
                   )}
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* Error Message */}
-          {errorMsg && (
-            <div className="alert-banner alert-error" style={{ marginTop: "20px" }}>
-              <span>⚠️</span>
-              <div>{errorMsg}</div>
-            </div>
-          )}
+                  <button
+                    className="btn-remove-preview"
+                    onClick={handleRemoveImage}
+                    title="Remove image"
+                    disabled={identifying}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
 
-          {/* Validation Warning */}
-          {isValidationErr && (
-            <div className="alert-banner alert-warning" style={{ marginTop: "20px" }}>
-              <span>⚠️</span>
-              <div>
-                <strong>{result.message}</strong>
-                <p style={{ marginTop: "4px", fontSize: "13px" }}>
-                  Please ensure the image is sharp, well-lit, and contains a clearly visible seed.
-                </p>
-              </div>
-            </div>
-          )}
+                <div className="preview-actions">
+                  <button
+                    className="btn btn-primary btn-analyze"
+                    onClick={handleIdentify}
+                    disabled={identifying}
+                  >
+                    {identifying ? (
+                      <>
+                        <span className="spinner"></span>
+                        <span>Analyzing seed morphology...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sprout size={18} />
+                        <span>Identify Seed</span>
+                      </>
+                    )}
+                  </button>
 
-          {/* Uncertain State */}
-          {isUncertain && (
-            <div className="seed-result-card" style={{ borderTopColor: "#f59e0b" }}>
-              <div className="alert-banner alert-warning">
-                <span>⚠️</span>
-                <div>
-                  <strong>Seed identification is uncertain.</strong>
-                  <div style={{ marginTop: "4px", fontSize: "13.5px" }}>
-                    {result.message || "Please upload a clearer image showing the seed from a closer angle."}
-                  </div>
-                  {seedData?.confidence_percent !== undefined && seedData.confidence_percent > 0 && (
-                    <div style={{ marginTop: "6px", fontSize: "12.5px", color: "#854d0e" }}>
-                      Model Confidence: <strong>{seedData.confidence_percent}%</strong> (Below confidence threshold).
-                    </div>
-                  )}
+                  <button
+                    className="btn btn-outline btn-reset"
+                    onClick={handleRemoveImage}
+                    disabled={identifying}
+                  >
+                    <RotateCcw size={16} />
+                    <span>Choose Another Seed</span>
+                  </button>
                 </div>
               </div>
+            )}
 
-              <div className="tips-box">
-                <strong>Tips for accurate seed identification:</strong>
-                <ul>
-                  <li>Place the seed on a plain, contrasting white background.</li>
-                  <li>Ensure sharp focus on seed shape, color, and surface texture.</li>
-                  <li>Take the photo with bright, balanced lighting without harsh shadows.</li>
-                </ul>
+            {/* Error Message */}
+            {errorMsg && (
+              <div className="alert-banner alert-error">
+                <AlertTriangle size={18} />
+                <div>{errorMsg}</div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
 
-          {/* Successful Identification */}
-          {isIdentified && seedData && (
-            <div className="seed-result-card">
-              <div className="seed-header">
-                <div>
-                  <div className="seed-name">
-                    {seedData.common_name || seedData.seed_name}
-                  </div>
-                  {seedData.scientific_name && (
-                    <div className="seed-scientific">
-                      Scientific Name: <em>{seedData.scientific_name}</em>
-                    </div>
-                  )}
-                </div>
-                <span className="confidence-badge confidence-high">
-                  🎯 {seedData.confidence_percent}% Confidence
+        {/* Right: Result Panel */}
+        <div className="seed-right-panel">
+          <div className="plant-card seed-result-panel-card">
+            <div className="result-panel-header">
+              <h3 className="panel-title">Seed Classification</h3>
+              {isIdentified && (
+                <span className="badge badge-success">
+                  <CheckCircle2 size={12} />
+                  <span>Seed Verified</span>
                 </span>
-              </div>
-
-              <div className="seed-meta-grid">
-                <div className="meta-item">
-                  <span className="meta-label">Seed Classification</span>
-                  <span className="meta-val">{seedData.seed_name}</span>
-                </div>
-                {seedData.common_name && (
-                  <div className="meta-item">
-                    <span className="meta-label">Common Name</span>
-                    <span className="meta-val">{seedData.common_name}</span>
-                  </div>
-                )}
-                {seedData.scientific_name && (
-                  <div className="meta-item">
-                    <span className="meta-label">Botanical Name</span>
-                    <span className="meta-val">{seedData.scientific_name}</span>
-                  </div>
-                )}
-              </div>
-
-              {seedData.explanation && (
-                <div className="seed-explanation">
-                  <strong>Identification Details:</strong>
-                  <p style={{ marginTop: "4px" }}>{seedData.explanation}</p>
-                </div>
               )}
             </div>
-          )}
+
+            {/* State 1: Empty State */}
+            {!result && !identifying && (
+              <div className="empty-analysis-state">
+                <div className="empty-state-icon">
+                  <Sprout size={36} />
+                </div>
+                <h4>Ready for Seed Inspection</h4>
+                <p>Upload a photograph of a seed, nut, grain, or pod to initiate optical taxonomy.</p>
+                <div className="guidelines-card">
+                  <strong>Photography tips for seed classification:</strong>
+                  <ul>
+                    <li>Use a neutral, plain background (such as white paper)</li>
+                    <li>Ensure sharp camera focus on the seed coat and texture</li>
+                    <li>Avoid extreme distance or blurry macro captures</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* State 2: Identifying Loading Animation */}
+            {identifying && (
+              <div className="loading-analysis-state">
+                <div className="loading-radar-ring">
+                  <div className="radar-pulse"></div>
+                  <Sprout size={32} className="radar-icon" />
+                </div>
+                <h4>Analyzing Seed Morphology</h4>
+                <p>Comparing seed coat texture, color gradients, and geometric contours with botanical taxonomy...</p>
+                <div className="loading-step-list">
+                  <div className="loading-step active">
+                    <span className="step-bullet"></span>
+                    <span>Morphological contour segmentation</span>
+                  </div>
+                  <div className="loading-step active">
+                    <span className="step-bullet"></span>
+                    <span>Taxonomic fruit/seed database matching</span>
+                  </div>
+                  <div className="loading-step active">
+                    <span className="step-bullet"></span>
+                    <span>Strict confidence threshold validation</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* State 3: Low Confidence Warning */}
+            {isLowConfidence && (
+              <div className="low-confidence-result-state">
+                <div className="alert-banner alert-warning">
+                  <AlertTriangle size={20} />
+                  <div>
+                    <strong style={{ fontSize: "15px" }}>Low confidence identification</strong>
+                    <p style={{ marginTop: "4px", fontSize: "13.5px" }}>
+                      The image does not provide enough evidence for a reliable seed identification.
+                    </p>
+                    <p style={{ marginTop: "4px", fontSize: "13px", color: "var(--text-secondary)" }}>
+                      Try placing the seed on a plain, contrasting surface with brighter ambient lighting.
+                    </p>
+                    {seedData?.confidence_percent !== undefined && (
+                      <div className="threshold-meta">
+                        Observation score: <strong>{seedData.confidence_percent}%</strong> (Below confidence threshold).
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {seedData?.candidates && seedData.candidates.length > 0 && (
+                  <div className="candidate-list">
+                    <h5 className="candidates-heading">Possible Candidate Taxa:</h5>
+                    {seedData.candidates.slice(0, 3).map((cand, idx) => (
+                      <div key={idx} className="candidate-item">
+                        <div className="candidate-names">
+                          <strong>{cand.common_name || cand.scientific_name}</strong>
+                          <em>({cand.scientific_name})</em>
+                        </div>
+                        <span className="confidence-badge confidence-medium">
+                          {cand.confidence_percent}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* State 4: Successful Identification (Adhering strictly to Rule 21: IDENTIFICATION ONLY) */}
+            {isIdentified && seedData && (
+              <div className="seed-identified-content">
+                <div className="seed-result-card-inner">
+                  <span className="species-tag">Seed Identified</span>
+                  
+                  <div className="seed-name-block">
+                    <div className="field-group">
+                      <span className="field-label">Common Name</span>
+                      <h2 className="seed-common-name">
+                        {seedData.common_name || seedData.seed_name}
+                      </h2>
+                    </div>
+
+                    <div className="field-group" style={{ marginTop: "12px" }}>
+                      <span className="field-label">Scientific Name</span>
+                      <div className="seed-scientific-name">
+                        <em>{seedData.scientific_name || seedData.seed_name}</em>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="confidence-metric-row" style={{ marginTop: "20px" }}>
+                    <span className="metric-label">Identification Confidence</span>
+                    <span className="confidence-badge confidence-high">
+                      {seedData.confidence_percent}% Confidence
+                    </span>
+                  </div>
+
+                  <div className="confidence-bar-wrap">
+                    <div 
+                      className="confidence-bar-fill high"
+                      style={{ width: `${Math.min(100, Math.max(20, seedData.confidence_percent))}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Candidates if multiple */}
+                {seedData.candidates && seedData.candidates.length > 1 && (
+                  <div className="candidate-list">
+                    <h5 className="candidates-heading">Alternative Species Candidates:</h5>
+                    {seedData.candidates.slice(1, 4).map((cand, idx) => (
+                      <div key={idx} className="candidate-item">
+                        <div className="candidate-names">
+                          <strong>{cand.common_name || cand.scientific_name}</strong>
+                          <em>({cand.scientific_name})</em>
+                        </div>
+                        <span className="confidence-badge confidence-medium">
+                          {cand.confidence_percent}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Action button per Section 22 */}
+                <div style={{ marginTop: "24px", textAlign: "center" }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleRemoveImage}
+                    style={{ width: "100%", padding: "13px" }}
+                  >
+                    <RotateCcw size={16} />
+                    <span>Identify Another Seed</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

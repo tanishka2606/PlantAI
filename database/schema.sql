@@ -23,5 +23,6 @@ CREATE TABLE IF NOT EXISTS plant_care (
     soil TEXT DEFAULT NULL,
     container TEXT DEFAULT NULL,
     location TEXT DEFAULT NULL,
+    fertilizer TEXT DEFAULT NULL,
     care TEXT DEFAULT NULL
 );

@@ -1,4 +1,4 @@
-﻿import io
+import io
 import sys
 import os
 from PIL import Image, ImageDraw
@@ -33,7 +33,7 @@ def run_tests():
         print("   Success:", res.get("success"))
         print("   Message:", res.get("message"))
         print("   Data:", res.get("data"))
-        assert res.get("status") in ("identified", "uncertain")
+        assert res.get("status") in ("identified", "uncertain", "low_confidence")
 
     # Seed Test 2: Real Seed (SEED3.jpg)
     s3_path = r"C:\Users\Dell\Downloads\SEED3.jpg"
@@ -46,7 +46,7 @@ def run_tests():
         print("   Success:", res.get("success"))
         print("   Message:", res.get("message"))
         print("   Data:", res.get("data"))
-        assert res.get("status") in ("identified", "uncertain")
+        assert res.get("status") in ("identified", "uncertain", "low_confidence")
 
     # Seed Test 3: Low-Confidence / Uncertain Seed (SEED2.jpg)
     s2_path = r"C:\Users\Dell\Downloads\SEED2.jpg"

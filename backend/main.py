@@ -1,4 +1,4 @@
-﻿import os
+import os
 import bcrypt
 import urllib.parse
 from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, status
@@ -243,6 +243,7 @@ def get_plant_care(plant_name: str, db: Session = Depends(get_db)):
                     "soil": plant.soil,
                     "container": plant.container,
                     "location": plant.location,
+                    "fertilizer": getattr(plant, "fertilizer", None) or "Apply balanced organic fertilizer during active growing season.",
                     "care": plant.care,
                     "source": "MySQL"
                 }

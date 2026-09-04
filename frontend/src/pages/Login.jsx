@@ -1,5 +1,16 @@
-﻿import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { 
+  Leaf, 
+  Mail, 
+  Lock, 
+  User, 
+  ArrowRight, 
+  CheckCircle2, 
+  AlertTriangle,
+  Sparkles,
+  ShieldCheck
+} from "lucide-react";
 import { loginUser, registerUser } from "../services/api";
 import "./Login.css";
 
@@ -25,7 +36,7 @@ function Login() {
     }
 
     if (isRegister && !name.trim()) {
-      setErrorMsg("Please enter your name.");
+      setErrorMsg("Please enter your full name.");
       return;
     }
 
@@ -35,142 +46,167 @@ function Login() {
       if (isRegister) {
         const res = await registerUser(name.trim(), email.trim(), password);
         if (res.success) {
-          setSuccessMsg("Account created successfully! Please sign in.");
+          setSuccessMsg("Account created successfully! Please sign in with your credentials.");
           setIsRegister(false);
           setPassword("");
         } else {
-          setErrorMsg(res.message || "Registration failed.");
+          setErrorMsg(res.message || "Registration could not be completed.");
         }
       } else {
         const res = await loginUser(email.trim(), password);
         if (res.success && res.data) {
           localStorage.setItem("plantai_user", JSON.stringify(res.data));
-          navigate("/");
-          window.location.reload();
+          navigate("/dashboard");
         } else {
-          setErrorMsg(res.message || "Invalid credentials.");
+          setErrorMsg(res.message || "Invalid email or password.");
         }
       }
     } catch (err) {
       console.error("Auth error:", err);
-      setErrorMsg("Could not connect to the backend server.");
+      setErrorMsg("Unable to connect to the authentication server. Please ensure the backend is running.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="page-container">
-      <div className="auth-container">
-        <header className="page-header" style={{ marginBottom: "24px" }}>
-          <span style={{ fontSize: "36px" }}>🌱</span>
-          <h1 className="page-title" style={{ fontSize: "28px", marginTop: "8px" }}>
-            {isRegister ? "Join PlantAI" : "Welcome Back"}
-          </h1>
-          <p className="page-subtitle">
+    <div className="auth-page-wrapper">
+      <div className="auth-card-container">
+        {/* Brand Header */}
+        <div className="auth-brand-header">
+          <Link to="/" className="auth-brand-link">
+            <div className="auth-brand-icon">
+              <Leaf size={22} />
+            </div>
+            <span className="auth-brand-title">Plant<span>AI</span></span>
+          </Link>
+          <h2 className="auth-title">
+            {isRegister ? "Create your account" : "Welcome back to PlantAI"}
+          </h2>
+          <p className="auth-subtitle">
             {isRegister
-              ? "Create your free account to track your plant collection"
-              : "Sign in to access personalized plant care & diagnostics"}
+              ? "Join PlantAI to manage your botanical collection and diagnostic history."
+              : "Enter your credentials to access your plant intelligence workspace."}
           </p>
-        </header>
+        </div>
 
-        <div className="plant-card">
-          <div className="auth-tabs">
-            <button
-              type="button"
-              className={`auth-tab ${!isRegister ? "active" : ""}`}
-              onClick={() => {
-                setIsRegister(false);
-                setErrorMsg("");
-                setSuccessMsg("");
-              }}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              className={`auth-tab ${isRegister ? "active" : ""}`}
-              onClick={() => {
-                setIsRegister(true);
-                setErrorMsg("");
-                setSuccessMsg("");
-              }}
-            >
-              Register
-            </button>
+        {/* Tab Switcher */}
+        <div className="auth-tabs-toggle">
+          <button
+            type="button"
+            className={`auth-toggle-tab ${!isRegister ? "active" : ""}`}
+            onClick={() => {
+              setIsRegister(false);
+              setErrorMsg("");
+              setSuccessMsg("");
+            }}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            className={`auth-toggle-tab ${isRegister ? "active" : ""}`}
+            onClick={() => {
+              setIsRegister(true);
+              setErrorMsg("");
+              setSuccessMsg("");
+            }}
+          >
+            Register Account
+          </button>
+        </div>
+
+        {/* Alerts */}
+        {errorMsg && (
+          <div className="alert-banner alert-error" style={{ marginBottom: "20px" }}>
+            <AlertTriangle size={18} />
+            <div>{errorMsg}</div>
           </div>
+        )}
 
-          {errorMsg && (
-            <div className="alert-banner alert-error" style={{ marginBottom: "18px" }}>
-              <span>⚠️</span>
-              <div>{errorMsg}</div>
-            </div>
-          )}
+        {successMsg && (
+          <div className="alert-banner alert-success" style={{ marginBottom: "20px" }}>
+            <CheckCircle2 size={18} />
+            <div>{successMsg}</div>
+          </div>
+        )}
 
-          {successMsg && (
-            <div className="alert-banner alert-info" style={{ marginBottom: "18px" }}>
-              <span>✅</span>
-              <div>{successMsg}</div>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            {isRegister && (
-              <div className="form-group">
-                <label className="form-label">Full Name</label>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="auth-form">
+          {isRegister && (
+            <div className="form-field-group">
+              <label className="form-field-label">Full Name</label>
+              <div className="input-with-icon">
+                <User size={18} className="field-leading-icon" />
                 <input
                   type="text"
-                  className="form-input"
-                  placeholder="e.g. Sarita / Alex"
+                  className="auth-input"
+                  placeholder="e.g. Dr. Eleanor Vance"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            <div className="form-group">
-              <label className="form-label">Email Address</label>
+          <div className="form-field-group">
+            <label className="form-field-label">Email Address</label>
+            <div className="input-with-icon">
+              <Mail size={18} className="field-leading-icon" />
               <input
                 type="email"
-                className="form-input"
+                className="auth-input"
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
+          </div>
 
-            <div className="form-group">
-              <label className="form-label">Password</label>
+          <div className="form-field-group">
+            <label className="form-field-label">Password</label>
+            <div className="input-with-icon">
+              <Lock size={18} className="field-leading-icon" />
               <input
                 type="password"
-                className="form-input"
-                placeholder="••••••••"
+                className="auth-input"
+                placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
+          </div>
 
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-              style={{ width: "100%", marginTop: "10px" }}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner"></span>
-                  <span>Processing...</span>
-                </>
-              ) : isRegister ? (
-                "Create Account"
-              ) : (
-                "Sign In"
-              )}
-            </button>
-          </form>
+          <button
+            type="submit"
+            className="btn btn-primary btn-auth-submit"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <span className="spinner"></span>
+                <span>Authenticating...</span>
+              </>
+            ) : isRegister ? (
+              <>
+                <span>Create Account</span>
+                <ArrowRight size={16} />
+              </>
+            ) : (
+              <>
+                <span>Sign In to PlantAI</span>
+                <ArrowRight size={16} />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="auth-card-footer">
+          <ShieldCheck size={16} className="text-emerald" />
+          <span>Secure authentication with bcrypt salted hash encryption</span>
         </div>
       </div>
     </div>

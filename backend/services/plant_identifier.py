@@ -1,4 +1,4 @@
-﻿import os
+import os
 import requests
 from dotenv import load_dotenv
 from typing import Dict, Any, List
@@ -116,6 +116,49 @@ def identify_plant(image_bytes: bytes, filename: str, content_type: str) -> Dict
                     candidates = kw_candidates
         except Exception as e:
             print("Kindwise API Request failed:", e)
+
+    # 4. Fallback to Gemini Vision if configured
+    AI_API_KEY = os.getenv("AI_API_KEY") or os.getenv("GEMINI_API_KEY")
+    if (not best_match or best_match["confidence"] < CONFIDENCE_THRESHOLD) and AI_API_KEY:
+        try:
+            import base64
+            import json
+            encoded_image = base64.b64encode(processed_bytes).decode("utf-8")
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={AI_API_KEY}"
+            prompt = (
+                "You are an expert botanical identification system. Inspect this plant image. "
+                "Output ONLY a valid JSON object with keys: "
+                "'scientific_name' (string), 'common_name' (string), 'genus' (string), 'family' (string), 'confidence' (float 0.0-1.0)."
+            )
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": "image/jpeg", "data": encoded_image}}
+                    ]
+                }],
+                "generationConfig": {"response_mime_type": "application/json"}
+            }
+            resp = requests.post(gemini_url, json=payload, timeout=20)
+            if resp.status_code == 200:
+                raw_text = resp.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                parsed = json.loads(raw_text)
+                sci_name = parsed.get("scientific_name")
+                if sci_name:
+                    gem_conf = float(parsed.get("confidence", 0.75))
+                    gem_item = {
+                        "scientific_name": sci_name,
+                        "common_name": parsed.get("common_name", sci_name),
+                        "genus": parsed.get("genus", sci_name.split()[0] if " " in sci_name else sci_name),
+                        "family": parsed.get("family", ""),
+                        "confidence": gem_conf,
+                        "confidence_percent": round(gem_conf * 100, 2)
+                    }
+                    if not best_match or gem_conf > best_match["confidence"]:
+                        best_match = gem_item
+                        candidates = [gem_item]
+        except Exception as e:
+            print("Gemini Plant Vision error:", e)
 
     # 4. Check if any matches were returned
     if not best_match:
