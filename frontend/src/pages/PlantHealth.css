@@ -4,6 +4,12 @@
   width: 100%;
 }
 
+.health-result-card {
+  margin-top: 24px;
+  text-align: left;
+  border-top: 4px solid var(--primary);
+}
+
 .health-status-header {
   display: flex;
   justify-content: space-between;
@@ -19,7 +25,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
 }
 
@@ -31,11 +37,34 @@
   color: #b91c1c;
 }
 
+.health-condition-banner {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.health-condition-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #991b1b;
+  letter-spacing: 0.5px;
+}
+
+.health-condition-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: #7f1d1d;
+  margin-top: 4px;
+}
+
 .health-sections-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .health-section-card {
@@ -66,15 +95,16 @@
   margin-bottom: 4px;
 }
 
-.disclaimer-box {
+.health-disclaimer-box {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   color: #1e40af;
-  padding: 12px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
   margin-top: 24px;
+  line-height: 1.5;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
 }

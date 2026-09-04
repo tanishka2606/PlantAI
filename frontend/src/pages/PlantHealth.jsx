@@ -10,6 +10,7 @@ function PlantHealth() {
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // Clear previous state when new image is chosen
   const handleFile = (file) => {
     if (!file) return;
     setSelectedFile(file);
@@ -48,7 +49,7 @@ function PlantHealth() {
       const response = await checkPlantHealth(selectedFile);
       setResult(response);
       if (!response.success && response.status === "error") {
-        setErrorMsg(response.message || "Failed to analyze plant health.");
+        setErrorMsg(response.message || "Plant health assessment service temporarily unavailable.");
       }
     } catch (err) {
       console.error("Plant health diagnosis error:", err);
@@ -59,9 +60,11 @@ function PlantHealth() {
   };
 
   const healthData = result?.data;
-  const isAssessed = result?.success;
-  const isHealthy = healthData?.is_healthy;
-  const isLowConfidence = result?.status === "low_confidence";
+  const isAnalyzed = result?.success && result?.status === "analyzed";
+  const isHealthy = isAnalyzed && healthData?.health_status === "healthy";
+  const isDiseased = isAnalyzed && healthData?.health_status === "possible_disease";
+  const isUncertain = result?.status === "uncertain";
+  const isValidationErr = result?.status === "validation_error";
 
   return (
     <div className="page-container">
@@ -71,7 +74,7 @@ function PlantHealth() {
         </div>
         <h1 className="page-title">Plant Health Check</h1>
         <p className="page-subtitle">
-          Upload an image of an affected leaf, stem, or flower to diagnose plant illnesses, deficiencies, and pests.
+          Upload an image of an affected leaf, stem, or plant part to analyze symptoms and detect potential diseases.
         </p>
       </header>
 
@@ -89,8 +92,8 @@ function PlantHealth() {
               onClick={() => document.getElementById("health-file-input").click()}
             >
               <div className="dropzone-icon">🔬</div>
-              <div className="dropzone-text">Upload affected leaf/plant photo</div>
-              <div className="dropzone-hint">Clear close-up photos of spots or discolored areas work best</div>
+              <div className="dropzone-text">Click to upload affected leaf or plant photo</div>
+              <div className="dropzone-hint">Clear close-up photos of leaves with good lighting yield the best results</div>
               <input
                 id="health-file-input"
                 type="file"
@@ -106,7 +109,7 @@ function PlantHealth() {
                 <button
                   className="btn-remove-preview"
                   onClick={handleRemoveImage}
-                  title="Remove image"
+                  title="Remove / Change Image"
                 >
                   ✕
                 </button>
@@ -122,12 +125,12 @@ function PlantHealth() {
                   {diagnosing ? (
                     <>
                       <span className="spinner"></span>
-                      <span>Diagnosing plant health...</span>
+                      <span>Analyzing plant health...</span>
                     </>
                   ) : (
                     <>
                       <span>🩺</span>
-                      <span>Check Disease & Health</span>
+                      <span>Analyze Health</span>
                     </>
                   )}
                 </button>
@@ -137,66 +140,114 @@ function PlantHealth() {
 
           {/* Error Message */}
           {errorMsg && (
-            <div className="alert-banner alert-error">
+            <div className="alert-banner alert-error" style={{ marginTop: "20px" }}>
               <span>⚠️</span>
               <div>{errorMsg}</div>
             </div>
           )}
 
-          {/* Low Confidence State */}
-          {isLowConfidence && (
-            <div className="alert-banner alert-warning" style={{ marginTop: "24px" }}>
+          {/* Validation Warning */}
+          {isValidationErr && (
+            <div className="alert-banner alert-warning" style={{ marginTop: "20px" }}>
               <span>⚠️</span>
               <div>
                 <strong>{result.message}</strong>
-                <div style={{ fontSize: "13px", marginTop: "4px" }}>
-                  Please upload a sharper, better-lit close-up of the affected foliage.
+                <p style={{ marginTop: "4px", fontSize: "13px" }}>
+                  Please ensure the image contains a clear, well-lit view of the plant foliage.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Uncertain State */}
+          {isUncertain && (
+            <div className="health-result-card" style={{ borderTopColor: "#f59e0b" }}>
+              <div className="alert-banner alert-warning">
+                <span>⚠️</span>
+                <div>
+                  <strong style={{ fontSize: "16px" }}>Analysis Uncertain</strong>
+                  <p style={{ marginTop: "6px", fontSize: "14px" }}>
+                    We could not confidently determine the plant condition.
+                  </p>
+                  <p style={{ marginTop: "4px", fontSize: "13.5px" }}>
+                    Please upload a clearer close-up image of the affected leaf.
+                  </p>
+                  {healthData?.confidence_percent !== undefined && healthData.confidence_percent > 0 && (
+                    <div style={{ marginTop: "8px", fontSize: "12.5px", color: "#854d0e" }}>
+                      Model Confidence: <strong>{healthData.confidence_percent}%</strong> (Below confidence threshold).
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="tips-box">
+                <strong>Tips for better disease diagnosis:</strong>
+                <ul>
+                  <li>Capture the boundary between healthy and discolored leaf tissue.</li>
+                  <li>Ensure the camera is sharply focused on spots, powdery coatings, or lesions.</li>
+                  <li>Avoid blurry captures or harsh glare.</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Healthy Result */}
+          {isHealthy && healthData && (
+            <div className="health-result-card" style={{ borderTopColor: "#15803d" }}>
+              <div className="health-status-header">
+                <div>
+                  <h3 style={{ fontSize: "18px", color: "var(--text-main)", marginBottom: "4px" }}>
+                    🌿 Plant Health
+                  </h3>
+                  <span className="status-indicator status-healthy">
+                    ✓ Status: Healthy
+                  </span>
+                </div>
+                <span className="confidence-badge confidence-high">
+                  🎯 {healthData.confidence_percent}% Confidence
+                </span>
+              </div>
+
+              <div className="alert-banner alert-info">
+                <span>🌿</span>
+                <div>
+                  <strong>{result.message || "The plant appears healthy."}</strong>
+                  <p style={{ marginTop: "4px", fontSize: "13px" }}>
+                    No significant signs of foliar pathogens, severe nutrient deficiencies, or pest damage were detected.
+                  </p>
+                </div>
+              </div>
+
+              <div className="health-disclaimer-box">
+                <span>ℹ️</span>
+                <div>
+                  <strong>Note:</strong> {healthData.disclaimer || "This is an AI-based assessment and should not be treated as a confirmed diagnosis."}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Successful Assessment */}
-          {isAssessed && healthData && (
-            <div style={{ marginTop: "28px" }}>
+          {/* Possible Disease Result */}
+          {isDiseased && healthData && (
+            <div className="health-result-card" style={{ borderTopColor: "#ef4444" }}>
               <div className="health-status-header">
                 <div>
-                  <span
-                    className={`status-indicator ${
-                      isHealthy ? "status-healthy" : "status-diseased"
-                    }`}
-                  >
-                    {isHealthy ? "💚 Healthy Plant" : "🦠 Disease / Health Issue Detected"}
+                  <h3 style={{ fontSize: "18px", color: "var(--text-main)", marginBottom: "4px" }}>
+                    🌿 Plant Health
+                  </h3>
+                  <span className="status-indicator status-diseased">
+                    ⚠️ Status: Possible Disease
                   </span>
-                  <div style={{ fontSize: "14px", color: "var(--text-muted)", marginTop: "4px" }}>
-                    Host Plant: <strong>{healthData.plant_name}</strong>
-                  </div>
                 </div>
-
-                <span
-                  className={`confidence-badge ${
-                    healthData.confidence >= 0.7 ? "confidence-high" : "confidence-medium"
-                  }`}
-                >
+                <span className="confidence-badge confidence-medium">
                   🎯 {healthData.confidence_percent}% Confidence
                 </span>
               </div>
 
-              {!isHealthy && healthData.disease_name && (
-                <div
-                  style={{
-                    background: "#fef2f2",
-                    border: "1px solid #fca5a5",
-                    borderRadius: "var(--radius-md)",
-                    padding: "16px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <div style={{ fontSize: "16px", fontWeight: "700", color: "#991b1b" }}>
-                    Diagnosed Condition: {healthData.disease_name}
-                  </div>
-                </div>
-              )}
+              <div className="health-condition-banner">
+                <div className="health-condition-title">Possible Condition</div>
+                <div className="health-condition-name">{healthData.condition}</div>
+              </div>
 
               <div className="health-sections-grid">
                 {healthData.symptoms && healthData.symptoms.length > 0 && (
@@ -241,7 +292,7 @@ function PlantHealth() {
                 {healthData.prevention && healthData.prevention.length > 0 && (
                   <div className="health-section-card">
                     <div className="health-section-title">
-                      <span>🛡️</span> Prevention & Ongoing Care
+                      <span>🛡️</span> Prevention & Maintenance
                     </div>
                     <ul className="health-list">
                       {healthData.prevention.map((prev, idx) => (
@@ -252,12 +303,11 @@ function PlantHealth() {
                 )}
               </div>
 
-              {/* Disclaimer */}
-              <div className="disclaimer-box">
+              <div className="health-disclaimer-box">
                 <span>ℹ️</span>
-                <span>
-                  <strong>Disclaimer:</strong> {healthData.disclaimer}
-                </span>
+                <div>
+                  <strong>Note:</strong> {healthData.disclaimer || "This is an AI-based assessment and should not be treated as a confirmed diagnosis."}
+                </div>
               </div>
             </div>
           )}

@@ -1,22 +1,29 @@
 ﻿import os
 import requests
+import json
 from dotenv import load_dotenv
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from .image_validator import validate_and_preprocess_image
 
 load_dotenv()
 
 KINDWISE_API_KEY = os.getenv("KINDWISE_API_KEY")
+AI_API_KEY = os.getenv("AI_API_KEY") or os.getenv("GEMINI_API_KEY")
+HEALTH_CONFIDENCE_THRESHOLD = float(os.getenv("HEALTH_CONFIDENCE_THRESHOLD", "0.70"))
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(10 * 1024 * 1024)))
+
+DISCLAIMER_TEXT = "AI health analysis provides guidance only and is not a confirmed professional diagnosis."
 
 def check_health(image_bytes: bytes, filename: str, content_type: str) -> Dict[str, Any]:
     """
-    Plant Health Diagnosis pipeline:
-    1. Validates and preprocesses image.
-    2. Calls Kindwise Health Assessment API.
-    3. Formats symptoms, causes, treatments, and prevention advice.
-    4. Attaches mandatory professional disclaimer.
+    Dedicated Plant Health & Disease Diagnosis Pipeline:
+    1. Validates image readability, lighting, format, and resolution.
+    2. Calls real plant pathology API (Kindwise Health Assessment / Gemini Vision Pathology).
+    3. Extracts real condition, symptoms, treatments, and true model confidence.
+    4. Applies strict confidence threshold (HEALTH_CONFIDENCE_THRESHOLD=0.70).
+    5. Returns structured response with professional medical/botanical disclaimer.
     """
+    # 1. Image Pre-flight Validation
     is_valid, processed_bytes, val_error, quality_warning = validate_and_preprocess_image(
         image_bytes, filename, content_type, max_size=MAX_UPLOAD_SIZE
     )
@@ -24,162 +31,199 @@ def check_health(image_bytes: bytes, filename: str, content_type: str) -> Dict[s
         return {
             "success": False,
             "status": "validation_error",
-            "message": val_error or "Unable to assess plant health from this image. Please upload a clear photo of the affected plant part.",
+            "message": val_error or "Please upload a clear image of the plant or affected leaf.",
             "data": None
         }
 
-    if not KINDWISE_API_KEY:
-        return {
-            "success": False,
-            "status": "error",
-            "message": "Plant health assessment service is temporarily unavailable. (Missing API Key)",
-            "data": None
-        }
+    is_healthy = True
+    health_confidence = 0.0
+    condition_name: Optional[str] = None
+    symptoms: List[str] = []
+    causes: List[str] = []
+    treatments: List[str] = []
+    prevention: List[str] = []
+    api_evaluated = False
+    quota_error = False
 
-    try:
-        response = requests.post(
-            "https://plant.id/api/v3/health_assessment",
-            headers={"Api-Key": KINDWISE_API_KEY},
-            files={"images": ("health.jpg", processed_bytes, "image/jpeg")},
-            timeout=30
-        )
+    # 2. Call Kindwise Health Assessment API
+    if KINDWISE_API_KEY:
+        try:
+            kw_url = "https://plant.id/api/v3/health_assessment?details=local_name,description,url,treatment,classification,common_names,cause"
+            response = requests.post(
+                kw_url,
+                headers={"Api-Key": KINDWISE_API_KEY},
+                files={"images": ("health.jpg", processed_bytes, "image/jpeg")},
+                timeout=30
+            )
 
-        if response.status_code not in (200, 201):
+            if response.status_code in (200, 201):
+                data = response.json()
+                result = data.get("result", {})
+                is_healthy_obj = result.get("is_healthy", {})
+                is_healthy_binary = bool(is_healthy_obj.get("binary", True))
+                is_healthy_prob = float(is_healthy_obj.get("probability", 1.0))
+
+                disease_suggestions = result.get("disease", {}).get("suggestions", [])
+
+                if is_healthy_binary and is_healthy_prob >= 0.5:
+                    is_healthy = True
+                    health_confidence = is_healthy_prob
+                    condition_name = None
+                else:
+                    is_healthy = False
+                    if disease_suggestions:
+                        top_disease = disease_suggestions[0]
+                        condition_name = top_disease.get("name", "Unknown Plant Condition")
+                        health_confidence = float(top_disease.get("probability", 0.0))
+                        details = top_disease.get("details", {}) or {}
+
+                        # Extract causes
+                        if details.get("cause"):
+                            causes.append(details.get("cause"))
+
+                        # Extract treatments
+                        treatment_data = details.get("treatment", {}) or {}
+                        bio_treat = treatment_data.get("biological", []) or []
+                        chem_treat = treatment_data.get("chemical", []) or []
+                        prev_treat = treatment_data.get("prevention", []) or []
+
+                        if bio_treat:
+                            treatments.extend([f"Organic/Biological: {b}" for b in bio_treat[:2]])
+                        if chem_treat:
+                            treatments.extend([f"Chemical: {c}" for c in chem_treat[:2]])
+                        if prev_treat:
+                            prevention.extend(prev_treat[:2])
+                    else:
+                        health_confidence = 1.0 - is_healthy_prob
+                        condition_name = "Unspecified Foliar Issue"
+
+                api_evaluated = True
+            elif response.status_code == 429:
+                quota_error = True
+                print("Kindwise Health API quota limit reached (429).")
+        except requests.exceptions.Timeout:
+            print("Kindwise Health API timed out.")
+        except Exception as e:
+            print("Kindwise Health API error:", e)
+
+    # 3. If Gemini / AI API key is configured and Kindwise didn't yield confident result
+    if (not api_evaluated or health_confidence < HEALTH_CONFIDENCE_THRESHOLD) and AI_API_KEY:
+        try:
+            import base64
+            b64_img = base64.b64encode(processed_bytes).decode("utf-8")
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={AI_API_KEY}"
+            prompt = (
+                "You are an expert plant pathologist. Inspect this plant/leaf image for diseases, pests, nutrient deficiencies, or healthy status. "
+                "Output ONLY a JSON object with keys: "
+                "'is_healthy' (boolean), 'condition' (string or null), 'confidence' (float 0.0-1.0), "
+                "'symptoms' (array of strings), 'causes' (array of strings), 'treatments' (array of strings), 'prevention' (array of strings). "
+                "Be rigorous: do not guess diseases if the leaf is healthy or if image is unclear."
+            )
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": "image/jpeg", "data": b64_img}}
+                    ]
+                }],
+                "generationConfig": {"response_mime_type": "application/json"}
+            }
+            resp = requests.post(gemini_url, json=payload, timeout=20)
+            if resp.status_code == 200:
+                raw_json = resp.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                parsed = json.loads(raw_json)
+                is_healthy = bool(parsed.get("is_healthy", True))
+                health_confidence = float(parsed.get("confidence", 0.0))
+                condition_name = parsed.get("condition")
+                symptoms = parsed.get("symptoms", []) or []
+                causes = parsed.get("causes", []) or []
+                treatments = parsed.get("treatments", []) or []
+                prevention = parsed.get("prevention", []) or []
+                api_evaluated = True
+        except Exception as e:
+            print("Gemini Health Vision error:", e)
+
+    # 4. Handle Service Failure / Quota Exhaustion
+    if not api_evaluated:
+        if quota_error:
             return {
                 "success": False,
                 "status": "error",
-                "message": "Health assessment service is temporarily unavailable. Please try again later.",
+                "message": "Plant health assessment service quota reached. Please check API key in .env.",
                 "data": None
             }
-
-        data = response.json()
-        result = data.get("result", {})
-        is_healthy_obj = result.get("is_healthy", {})
-        is_healthy = bool(is_healthy_obj.get("binary", True))
-        health_prob = float(is_healthy_obj.get("probability", 1.0))
-
-        disease_suggestions = result.get("disease", {}).get("suggestions", [])
-
-        # Check for plant identification in response
-        plant_name = "Plant"
-        classification_sugs = result.get("classification", {}).get("suggestions", [])
-        if classification_sugs:
-            c_name = classification_sugs[0].get("details", {}).get("commonNames")
-            plant_name = c_name[0] if c_name else classification_sugs[0].get("name", "Plant")
-
-        formatted_diseases = []
-        all_symptoms = []
-        all_causes = []
-        all_treatments = []
-        all_prevention = []
-
-        if is_healthy:
-            status_text = "Healthy"
-            conf_pct = round(health_prob * 100, 2)
-            msg = f"The {plant_name} appears healthy with no major disease detected."
-        else:
-            status_text = "Disease / Issue Detected"
-            top_prob = disease_suggestions[0].get("probability", 0.0) if disease_suggestions else 0.5
-            conf_pct = round(top_prob * 100, 2)
-            msg = "Potential health issues or diseases detected."
-
-            for d in disease_suggestions[:3]:
-                name = d.get("name", "Unknown condition")
-                prob = float(d.get("probability", 0.0))
-                details = d.get("details", {}) or {}
-                desc = details.get("description", "")
-                treatment = details.get("treatment", {}) or {}
-
-                # Biological / chemical treatments
-                chem = treatment.get("chemical", [])
-                bio = treatment.get("biological", [])
-                prev = treatment.get("prevention", [])
-
-                if chem:
-                    all_treatments.extend([f"Chemical: {c}" for c in chem[:2]])
-                if bio:
-                    all_treatments.extend([f"Organic/Biological: {b}" for b in bio[:2]])
-                if prev:
-                    all_prevention.extend(prev[:2])
-
-                # Common botanical symptoms
-                if "fungal" in name.lower() or "spot" in name.lower():
-                    all_symptoms.append("Spots or lesions on leaves, discoloration.")
-                    all_causes.append("Excessive humidity, damp foliage, or poor air circulation.")
-                elif "nutrient" in name.lower() or "deficiency" in name.lower():
-                    all_symptoms.append("Yellowing leaves (chlorosis), stunted growth.")
-                    all_causes.append("Soil nutrient depletion or improper pH inhibiting nutrient uptake.")
-                elif "water" in name.lower() or "rot" in name.lower():
-                    all_symptoms.append("Wilting, yellowing lower leaves, soft root stems.")
-                    all_causes.append("Overwatering, poorly draining soil, or clogged drainage holes.")
-
-                formatted_diseases.append({
-                    "name": name,
-                    "probability": prob,
-                    "probability_percent": round(prob * 100, 2),
-                    "description": desc
-                })
-
-        # Ensure sensible defaults if lists are empty
-        if not all_treatments and not is_healthy:
-            all_treatments = [
-                "Isolate the plant to prevent spreading to other plants.",
-                "Prune and safely dispose of heavily infected leaves.",
-                "Apply organic neem oil spray in the evening hours."
-            ]
-        if not all_prevention:
-            all_prevention = [
-                "Ensure proper pot drainage and avoid overwatering.",
-                "Water at the base of the plant to keep leaves dry.",
-                "Provide adequate sunlight and good air circulation."
-            ]
-
-        # Low confidence detection
-        if not is_healthy and formatted_diseases and formatted_diseases[0]["probability"] < 0.25:
-            return {
-                "success": False,
-                "status": "low_confidence",
-                "message": "Low confidence result. Please upload a clear close-up image of the affected area with good lighting.",
-                "data": {
-                    "plant_name": plant_name,
-                    "is_healthy": is_healthy,
-                    "health_status": "Low Confidence",
-                    "confidence": formatted_diseases[0]["probability"],
-                    "confidence_percent": formatted_diseases[0]["probability_percent"],
-                    "diseases": formatted_diseases,
-                    "symptoms": all_symptoms,
-                    "causes": all_causes,
-                    "treatments": all_treatments,
-                    "prevention": all_prevention,
-                    "disclaimer": "AI health analysis provides guidance only and is not a confirmed professional diagnosis."
-                }
-            }
-
-        return {
-            "success": True,
-            "status": "assessed",
-            "message": msg,
-            "data": {
-                "plant_name": plant_name,
-                "is_healthy": is_healthy,
-                "health_status": status_text,
-                "disease_name": formatted_diseases[0]["name"] if formatted_diseases else None,
-                "confidence": health_prob if is_healthy else (formatted_diseases[0]["probability"] if formatted_diseases else 0.5),
-                "confidence_percent": conf_pct,
-                "diseases": formatted_diseases,
-                "symptoms": list(dict.fromkeys(all_symptoms)),
-                "causes": list(dict.fromkeys(all_causes)),
-                "treatments": list(dict.fromkeys(all_treatments)),
-                "prevention": list(dict.fromkeys(all_prevention)),
-                "disclaimer": "AI health analysis provides guidance only and is not a confirmed professional diagnosis."
-            }
-        }
-
-    except Exception as e:
-        print("Health check exception:", e)
         return {
             "success": False,
-            "status": "error",
-            "message": "Could not complete plant health assessment. Please try again.",
-            "data": None
+            "status": "uncertain",
+            "data": {
+                "health_status": "uncertain",
+                "condition": None,
+                "confidence": 0.0,
+                "confidence_percent": 0.0
+            },
+            "message": "Unable to confidently determine the plant condition. Please upload a clearer close-up image of the affected leaf."
         }
+
+    conf_rounded = round(health_confidence, 2)
+    conf_pct = round(health_confidence * 100, 1)
+
+    # 5. Apply Strict Confidence Threshold
+    if health_confidence < HEALTH_CONFIDENCE_THRESHOLD:
+        return {
+            "success": False,
+            "status": "uncertain",
+            "data": {
+                "health_status": "uncertain",
+                "condition": None,
+                "confidence": conf_rounded,
+                "confidence_percent": conf_pct
+            },
+            "message": "Unable to confidently determine the plant condition. Please upload a clearer close-up image of the affected leaf."
+        }
+
+    # 6. High Confidence Healthy Plant
+    if is_healthy:
+        return {
+            "success": True,
+            "status": "analyzed",
+            "data": {
+                "health_status": "healthy",
+                "condition": None,
+                "confidence": conf_rounded,
+                "confidence_percent": conf_pct,
+                "disclaimer": DISCLAIMER_TEXT
+            },
+            "message": "The plant appears healthy."
+        }
+
+    # 7. High Confidence Possible Disease
+    # Fallback recommendations if empty
+    if not treatments:
+        treatments = [
+            "Isolate the plant to prevent spreading to neighboring plants.",
+            "Prune and safely discard heavily infected foliage.",
+            "Apply organic neem oil solution or an appropriate copper-based fungicide."
+        ]
+    if not prevention:
+        prevention = [
+            "Ensure proper soil drainage and avoid waterlogging roots.",
+            "Water directly at the base of the plant to keep foliage dry.",
+            "Maintain adequate spacing between pots for good airflow."
+        ]
+
+    return {
+        "success": True,
+        "status": "analyzed",
+        "data": {
+            "health_status": "possible_disease",
+            "condition": condition_name or "Foliar Condition",
+            "confidence": conf_rounded,
+            "confidence_percent": conf_pct,
+            "symptoms": symptoms,
+            "causes": causes,
+            "treatments": treatments,
+            "prevention": prevention,
+            "disclaimer": DISCLAIMER_TEXT
+        },
+        "message": "Plant health analysis completed."
+    }

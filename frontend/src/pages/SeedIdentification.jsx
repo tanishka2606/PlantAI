@@ -10,7 +10,7 @@ function SeedIdentification() {
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Clear state when new file is selected
+  // Instantly clear stale state when a new image is selected
   const handleFile = (file) => {
     if (!file) return;
     setSelectedFile(file);
@@ -49,11 +49,11 @@ function SeedIdentification() {
       const response = await identifySeed(selectedFile);
       setResult(response);
       if (!response.success && response.status === "error") {
-        setErrorMsg(response.message || "Failed to identify seed.");
+        setErrorMsg(response.message || "Seed identification service temporarily unavailable.");
       }
     } catch (err) {
       console.error("Seed identification error:", err);
-      setErrorMsg("Could not connect to the PlantAI backend. Please check your connection.");
+      setErrorMsg("Could not connect to the PlantAI backend. Please verify your connection.");
     } finally {
       setIdentifying(false);
     }
@@ -61,7 +61,8 @@ function SeedIdentification() {
 
   const seedData = result?.data;
   const isIdentified = result?.success && result?.status === "identified";
-  const isLowConfidence = result?.status === "low_confidence";
+  const isUncertain = result?.status === "uncertain";
+  const isValidationErr = result?.status === "validation_error";
 
   return (
     <div className="page-container">
@@ -71,7 +72,7 @@ function SeedIdentification() {
         </div>
         <h1 className="page-title">Seed Identification</h1>
         <p className="page-subtitle">
-          Upload a clear close-up photograph of seeds, grains, or pods to accurately determine their botanical source.
+          Upload a clear close-up photograph of a seed, grain, or pod to accurately determine its botanical origin.
         </p>
       </header>
 
@@ -90,7 +91,7 @@ function SeedIdentification() {
             >
               <div className="dropzone-icon">🌱</div>
               <div className="dropzone-text">Click to upload seed image or drag & drop</div>
-              <div className="dropzone-hint">Clear close-up photos yield the highest accuracy</div>
+              <div className="dropzone-hint">Clear close-up images of single seeds produce the highest accuracy</div>
               <input
                 id="seed-file-input"
                 type="file"
@@ -106,7 +107,7 @@ function SeedIdentification() {
                 <button
                   className="btn-remove-preview"
                   onClick={handleRemoveImage}
-                  title="Remove image"
+                  title="Remove / Change Image"
                 >
                   ✕
                 </button>
@@ -137,60 +138,51 @@ function SeedIdentification() {
 
           {/* Error Message */}
           {errorMsg && (
-            <div className="alert-banner alert-error">
+            <div className="alert-banner alert-error" style={{ marginTop: "20px" }}>
               <span>⚠️</span>
               <div>{errorMsg}</div>
             </div>
           )}
 
-          {/* Validation Error */}
-          {result && result.status === "validation_error" && (
-            <div className="alert-banner alert-warning">
+          {/* Validation Warning */}
+          {isValidationErr && (
+            <div className="alert-banner alert-warning" style={{ marginTop: "20px" }}>
               <span>⚠️</span>
-              <div>{result.message}</div>
+              <div>
+                <strong>{result.message}</strong>
+                <p style={{ marginTop: "4px", fontSize: "13px" }}>
+                  Please ensure the image is sharp, well-lit, and contains a clearly visible seed.
+                </p>
+              </div>
             </div>
           )}
 
-          {/* Low Confidence State */}
-          {isLowConfidence && (
+          {/* Uncertain State */}
+          {isUncertain && (
             <div className="seed-result-card" style={{ borderTopColor: "#f59e0b" }}>
               <div className="alert-banner alert-warning">
                 <span>⚠️</span>
                 <div>
-                  <strong>{result.message}</strong>
-                  <div style={{ marginTop: "4px", fontSize: "13px" }}>
-                    Recorded confidence: <strong>{seedData?.confidence_percent}%</strong> (Below confidence threshold).
+                  <strong>Seed identification is uncertain.</strong>
+                  <div style={{ marginTop: "4px", fontSize: "13.5px" }}>
+                    {result.message || "Please upload a clearer image showing the seed from a closer angle."}
                   </div>
+                  {seedData?.confidence_percent !== undefined && seedData.confidence_percent > 0 && (
+                    <div style={{ marginTop: "6px", fontSize: "12.5px", color: "#854d0e" }}>
+                      Model Confidence: <strong>{seedData.confidence_percent}%</strong> (Below confidence threshold).
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="tips-box">
-                <strong>Tips for higher seed accuracy:</strong>
+                <strong>Tips for accurate seed identification:</strong>
                 <ul>
-                  <li>Place seeds on a plain, contrasting white or neutral surface.</li>
-                  <li>Ensure sharp focus on seed coat texture, color, and shape.</li>
-                  <li>Take the photo with good ambient light without harsh shadows.</li>
+                  <li>Place the seed on a plain, contrasting white background.</li>
+                  <li>Ensure sharp focus on seed shape, color, and surface texture.</li>
+                  <li>Take the photo with bright, balanced lighting without harsh shadows.</li>
                 </ul>
               </div>
-
-              {seedData?.candidates && seedData.candidates.length > 0 && (
-                <div className="candidate-list">
-                  <h4 style={{ fontSize: "14px", color: "var(--text-main)", marginBottom: "10px" }}>
-                    Possible Botanical Matches:
-                  </h4>
-                  {seedData.candidates.slice(0, 3).map((cand, idx) => (
-                    <div key={idx} className="candidate-item">
-                      <div className="candidate-names">
-                        <strong>{cand.common_name || cand.scientific_name}</strong>
-                        <em>({cand.scientific_name})</em>
-                      </div>
-                      <span className="confidence-badge confidence-medium">
-                        {cand.confidence_percent}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
@@ -202,35 +194,40 @@ function SeedIdentification() {
                   <div className="seed-name">
                     {seedData.common_name || seedData.seed_name}
                   </div>
-                  <div className="seed-scientific">
-                    Botanical Name: {seedData.scientific_name}
-                  </div>
+                  {seedData.scientific_name && (
+                    <div className="seed-scientific">
+                      Scientific Name: <em>{seedData.scientific_name}</em>
+                    </div>
+                  )}
                 </div>
-                <span
-                  className={`confidence-badge ${
-                    seedData.confidence >= 0.6 ? "confidence-high" : "confidence-medium"
-                  }`}
-                >
+                <span className="confidence-badge confidence-high">
                   🎯 {seedData.confidence_percent}% Confidence
                 </span>
               </div>
 
-              {seedData.candidates && seedData.candidates.length > 1 && (
-                <div className="candidate-list">
-                  <h4 style={{ fontSize: "14px", color: "var(--text-main)", marginBottom: "10px" }}>
-                    Top Candidate Matches:
-                  </h4>
-                  {seedData.candidates.slice(0, 3).map((cand, idx) => (
-                    <div key={idx} className="candidate-item">
-                      <div className="candidate-names">
-                        <strong>{cand.common_name || cand.scientific_name}</strong>
-                        <em>({cand.scientific_name})</em>
-                      </div>
-                      <span className="confidence-badge confidence-medium">
-                        {cand.confidence_percent}%
-                      </span>
-                    </div>
-                  ))}
+              <div className="seed-meta-grid">
+                <div className="meta-item">
+                  <span className="meta-label">Seed Classification</span>
+                  <span className="meta-val">{seedData.seed_name}</span>
+                </div>
+                {seedData.common_name && (
+                  <div className="meta-item">
+                    <span className="meta-label">Common Name</span>
+                    <span className="meta-val">{seedData.common_name}</span>
+                  </div>
+                )}
+                {seedData.scientific_name && (
+                  <div className="meta-item">
+                    <span className="meta-label">Botanical Name</span>
+                    <span className="meta-val">{seedData.scientific_name}</span>
+                  </div>
+                )}
+              </div>
+
+              {seedData.explanation && (
+                <div className="seed-explanation">
+                  <strong>Identification Details:</strong>
+                  <p style={{ marginTop: "4px" }}>{seedData.explanation}</p>
                 </div>
               )}
             </div>
