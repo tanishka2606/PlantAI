@@ -51,7 +51,7 @@ function PlantDetails() {
       }
     } catch (err) {
       console.error("Plant care fetch error:", err);
-      setErrorMsg("Unable to connect to the MySQL plant database. Please make sure the backend server is running.");
+      setErrorMsg("Unable to retrieve plant care information. Please make sure the backend server is running.");
     } finally {
       setLoading(false);
     }
@@ -90,7 +90,7 @@ function PlantDetails() {
       <header className="page-header">
         <div className="page-badge">
           <Database size={14} />
-          <span>Relational MySQL Botanical Care Catalog</span>
+          <span>Botanical Care Catalog & AI Intelligence</span>
         </div>
         <h1 className="page-title">Plant Care Guide</h1>
         <p className="page-subtitle">
@@ -105,7 +105,7 @@ function PlantDetails() {
           <input
             type="text"
             className="care-search-input"
-            placeholder="Search plant by common or scientific name (e.g., Neem, Rose, Tomato, Snake Plant)..."
+            placeholder="Search plant by common or scientific name (e.g., Tulip, Lavender, Hibiscus, Rose, Neem)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -119,24 +119,21 @@ function PlantDetails() {
       <div className="quick-suggestions-bar">
         <span className="suggestions-label">Popular profiles:</span>
         {[
-          "Neem",
-          "Mango",
+          "Tulip",
+          "Lavender",
+          "Hibiscus",
           "Rose",
           "Tomato",
           "Aloe Vera",
-          "Hibiscus",
+          "Orchid",
+          "Apple",
+          "Neem",
+          "Mango",
           "Jasmine",
           "Tulsi",
           "Mint",
-          "Coriander",
+          "Monstera",
           "Banana",
-          "Guava",
-          "Papaya",
-          "Pomegranate",
-          "Potato",
-          "Spinach",
-          "Chilli",
-          "Okra",
           "Snake Plant"
         ].map((name) => (
           <button
@@ -155,7 +152,7 @@ function PlantDetails() {
         {loading && (
           <div className="care-loading-state">
             <span className="spinner spinner-primary" style={{ width: "32px", height: "32px" }}></span>
-            <p>Retrieving botanical record from MySQL database...</p>
+            <p>Retrieving botanical care guide...</p>
           </div>
         )}
 
@@ -198,10 +195,17 @@ function PlantDetails() {
               </div>
 
               <div className="care-meta-tag">
-                <span className="badge badge-forest">
-                  <Database size={13} />
-                  <span>MySQL Record #{careData.id || "Verified"}</span>
-                </span>
+                {careData.source === "MySQL" && careData.id ? (
+                  <span className="badge badge-forest">
+                    <Database size={13} />
+                    <span>MySQL Botanical Record #{careData.id}</span>
+                  </span>
+                ) : (
+                  <span className="badge badge-forest" style={{ background: "rgba(16, 185, 129, 0.15)", borderColor: "rgba(16, 185, 129, 0.3)" }}>
+                    <Sparkles size={13} style={{ color: "#34d399" }} />
+                    <span>{careData.source || "AI Botanical Intelligence Guide"}</span>
+                  </span>
+                )}
               </div>
             </div>
 

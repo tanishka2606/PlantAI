@@ -71,7 +71,7 @@ function SeedIdentification() {
     try {
       const response = await identifySeed(selectedFile);
       setResult(response);
-      if (!response.success && response.status === "error") {
+      if (!response.success) {
         setErrorMsg(response.message || "Seed identification service is temporarily unavailable.");
       }
     } catch (err) {
@@ -82,8 +82,8 @@ function SeedIdentification() {
     }
   };
 
-  const seedData = result?.data;
-  const isIdentified = result?.success && result?.status === "identified";
+  const seedData = result?.data || result;
+  const isIdentified = Boolean(result?.success && (result?.status === "identified" || result?.seed_name));
   const isLowConfidence = result?.status === "low_confidence" || result?.status === "uncertain";
 
   return (
@@ -254,6 +254,19 @@ function SeedIdentification() {
               </div>
             )}
 
+            {/* State 2b: Unsuccessful / API Notice */}
+            {result && !result.success && !isLowConfidence && (
+              <div className="alert-banner alert-error" style={{ marginTop: "16px" }}>
+                <AlertTriangle size={20} />
+                <div>
+                  <strong style={{ fontSize: "15px" }}>Identification Notice</strong>
+                  <p style={{ marginTop: "4px", fontSize: "13.5px" }}>
+                    {result.message || "Kindwise could not identify this image. Please check your image or credentials."}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* State 3: Low Confidence Warning */}
             {isLowConfidence && (
               <div className="low-confidence-result-state">
@@ -313,6 +326,11 @@ function SeedIdentification() {
                       <div className="seed-scientific-name">
                         <em>{seedData.scientific_name || seedData.seed_name}</em>
                       </div>
+                      {seedData.class_index !== undefined && (
+                        <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--text-muted)" }}>
+                          <span>Model Class #{seedData.class_index}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

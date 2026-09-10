@@ -1,7 +1,8 @@
 # Environment variables and secrets (CRITICAL)
 .env
-.env.local
-.env.*.local
+.env.*
+*.env
+**/.env
 backend/.env
 frontend/.env
 
@@ -47,5 +48,6 @@ seed_dataset/
 # Scratch / Training Scripts
 backend/update_env.py
 backend/train_seed_model.py
+backend/train_seed_model_pytorch.py
 backend/test_download_images.py
 backend/test_health_and_seed.py

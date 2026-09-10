@@ -19,9 +19,10 @@ from services.plant_identifier import identify_plant
 from services.seed_identifier import identify_seed
 from services.health_checker import check_health
 from services.plant_assistant import ask_assistant
+from services.plant_care_service import get_plant_care_with_fallback
 
 # Load environment configuration
-load_dotenv()
+load_dotenv(override=True)
 
 # Initialize Database Schema
 Base.metadata.create_all(bind=engine)
@@ -156,6 +157,7 @@ async def scan_plant(file: UploadFile = File(...)):
 # 4. Seed Identification Endpoint
 # -------------------------------------------------------------
 @app.post("/seed-identify")
+@app.post("/identify-seed")
 async def scan_seed(file: UploadFile = File(...)):
     try:
         image_bytes = await file.read()
@@ -195,66 +197,13 @@ async def plant_health(file: UploadFile = File(...)):
         }
 
 # -------------------------------------------------------------
-# 6. Plant Care Retrieval from MySQL
+# 6. Plant Care Retrieval (MySQL Primary + AI/API Fallback)
 # -------------------------------------------------------------
 @app.get("/plant-care/{plant_name}")
 def get_plant_care(plant_name: str, db: Session = Depends(get_db)):
     try:
-        raw_name = urllib.parse.unquote(plant_name).strip()
-        if not raw_name:
-            return {
-                "success": False,
-                "status": "not_found",
-                "message": "Plant name is required.",
-                "data": None
-            }
-
-        # 1. Exact case-insensitive match on scientific name
-        plant = db.query(PlantCare).filter(
-            PlantCare.plant_name.ilike(raw_name)
-        ).first()
-
-        # 2. Exact match on common name
-        if not plant:
-            plant = db.query(PlantCare).filter(
-                PlantCare.common_name.ilike(raw_name)
-            ).first()
-
-        # 3. Safe normalized match (Genus / substring)
-        if not plant and len(raw_name) >= 3:
-            first_word = raw_name.split()[0]
-            plant = db.query(PlantCare).filter(
-                (PlantCare.plant_name.ilike(f"%{raw_name}%")) |
-                (PlantCare.common_name.ilike(f"%{raw_name}%")) |
-                (PlantCare.plant_name.ilike(f"{first_word}%"))
-            ).first()
-
-        if plant:
-            return {
-                "success": True,
-                "status": "found",
-                "message": "Plant care guide retrieved from database.",
-                "data": {
-                    "id": plant.id,
-                    "plant_name": plant.plant_name,
-                    "common_name": plant.common_name or plant.plant_name,
-                    "sunlight": plant.sunlight,
-                    "water": plant.water,
-                    "soil": plant.soil,
-                    "container": plant.container,
-                    "location": plant.location,
-                    "fertilizer": getattr(plant, "fertilizer", None) or "Apply balanced organic fertilizer during active growing season.",
-                    "care": plant.care,
-                    "source": "MySQL"
-                }
-            }
-
-        return {
-            "success": False,
-            "status": "not_found",
-            "message": f"Detailed care information for '{raw_name}' is currently unavailable in the database.",
-            "data": None
-        }
+        result = get_plant_care_with_fallback(plant_name, db)
+        return result
     except Exception as e:
         print("get_plant_care error:", e)
         return {
